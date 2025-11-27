@@ -9,31 +9,32 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "postinstall": "node scripts/fix-better-sqlite3.js"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "better-sqlite3": "^12.4.6",
+    "drizzle-orm": "^0.36.0",
     "next": "^15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "drizzle-orm": "^0.36.0",
-    "better-sqlite3": "^11.0.0",
-    "@tanstack/react-query": "^5.0.0",
-    "zod": "^3.23.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/uuid": "^10.0.0",
-    "typescript": "^5.0.0",
+    "autoprefixer": "^10.4.0",
+    "drizzle-kit": "^0.27.0",
     "eslint": "^8.0.0",
     "eslint-config-next": "^15.0.0",
-    "tailwindcss": "^3.4.0",
     "postcss": "^8.4.0",
-    "autoprefixer": "^10.4.0",
-    "drizzle-kit": "^0.27.0"
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.0.0"
   },
   "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd"
 }

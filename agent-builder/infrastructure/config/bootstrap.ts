@@ -68,7 +68,7 @@ export function loadConfig(): AppConfig {
   const rootDir = process.cwd();
 
   return {
-    dbPath: process.env.DATABASE_URL || path.join(rootDir, '.data', 'agents.db'),
+    dbPath: process.env.DATABASE_URL || path.join(rootDir, 'data', 'agents.db'),
     sandboxRoot: process.env.SANDBOX_ROOT || path.join(rootDir, '.sandbox'),
     workspaceRoot: process.env.WORKSPACE_ROOT || path.join(rootDir, 'workspace'),
     openRouterApiKey: process.env.OPENROUTER_API_KEY,

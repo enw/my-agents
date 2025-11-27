@@ -36,6 +36,9 @@ import {
   ValidationError,
 } from '../../domain/ports';
 
+import { agents } from '../persistence/schema';
+import { eq, and, desc, asc, like, or, sql } from 'drizzle-orm';
+
 // ============================================================================
 // MODEL ADAPTERS - LLM Provider Implementations
 // ============================================================================
@@ -554,37 +557,116 @@ export class ModelFactory {
 export class SqliteAgentRepository implements AgentPort {
   constructor(private db: any) {} // Drizzle DB instance
 
+  private mapDbRowToAgent(row: any): Agent {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      systemPrompt: row.systemPrompt,
+      defaultModel: row.defaultModel,
+      allowedTools: JSON.parse(row.allowedTools || '[]'),
+      tags: JSON.parse(row.tags || '[]'),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   async create(data: CreateAgentData): Promise<Agent> {
     const id = crypto.randomUUID();
     const now = new Date();
 
-    const agent: Agent = {
+    const dbRow = {
       id,
       name: data.name,
       description: data.description,
       systemPrompt: data.systemPrompt,
       defaultModel: data.defaultModel,
-      allowedTools: data.allowedTools || [],
-      tags: data.tags || [],
+      allowedTools: JSON.stringify(data.allowedTools || []),
+      tags: JSON.stringify(data.tags || []),
       createdAt: now,
       updatedAt: now,
     };
 
-    // Insert using Drizzle
-    // await this.db.insert(agentsTable).values(agent);
+    await this.db.insert(agents).values(dbRow);
 
-    return agent;
+    return this.mapDbRowToAgent(dbRow);
   }
 
   async findById(id: string): Promise<Agent | null> {
-    // const result = await this.db.select().from(agentsTable).where(eq(agentsTable.id, id));
-    // return result[0] || null;
-    throw new Error('Not implemented - requires Drizzle schema');
+    const result = await this.db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, id))
+      .get();
+
+    if (!result) {
+      return null;
+    }
+
+    return this.mapDbRowToAgent(result);
   }
 
   async findMany(criteria: AgentQueryCriteria): Promise<Agent[]> {
-    // Build dynamic query with Drizzle
-    throw new Error('Not implemented - requires Drizzle schema');
+    const conditions = [];
+
+    // Filter by tags if provided
+    if (criteria.tags && criteria.tags.length > 0) {
+      // SQLite JSON search - check if any tag exists in the tags JSON array
+      // Build OR conditions for each tag
+      const tagConditions = criteria.tags.map(tag =>
+        sql`EXISTS (SELECT 1 FROM json_each(${agents.tags}) WHERE json_each.value = ${tag})`
+      );
+      // Combine with OR - at least one tag must match
+      if (tagConditions.length === 1) {
+        conditions.push(tagConditions[0]);
+      } else {
+        // Use SQL to combine OR conditions
+        let combined = tagConditions[0];
+        for (let i = 1; i < tagConditions.length; i++) {
+          combined = sql`${combined} OR ${tagConditions[i]}`;
+        }
+        conditions.push(sql`(${combined})`);
+      }
+    }
+
+    // Search in name or description
+    if (criteria.search) {
+      const searchPattern = `%${criteria.search}%`;
+      conditions.push(
+        or(
+          like(agents.name, searchPattern),
+          like(agents.description, searchPattern)
+        )!
+      );
+    }
+
+    // Build query
+    let query = this.db.select().from(agents);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    // Ordering
+    const orderBy = criteria.orderBy || 'updatedAt';
+    const orderDir = criteria.orderDir || 'desc';
+    
+    if (orderBy === 'name') {
+      query = query.orderBy(orderDir === 'asc' ? asc(agents.name) : desc(agents.name));
+    } else if (orderBy === 'createdAt') {
+      query = query.orderBy(orderDir === 'asc' ? asc(agents.createdAt) : desc(agents.createdAt));
+    } else {
+      query = query.orderBy(orderDir === 'asc' ? asc(agents.updatedAt) : desc(agents.updatedAt));
+    }
+
+    // Limit and offset
+    const limit = criteria.limit || 50;
+    const offset = criteria.offset || 0;
+    query = query.limit(limit).offset(offset);
+
+    const results = await query.all();
+
+    return results.map(row => this.mapDbRowToAgent(row));
   }
 
   async update(id: string, data: UpdateAgentData): Promise<Agent> {
@@ -593,15 +675,23 @@ export class SqliteAgentRepository implements AgentPort {
       throw new NotFoundError('Agent', id);
     }
 
-    const updated: Agent = {
-      ...existing,
-      ...data,
+    const updateData: any = {
       updatedAt: new Date(),
     };
 
-    // await this.db.update(agentsTable).set(updated).where(eq(agentsTable.id, id));
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.systemPrompt !== undefined) updateData.systemPrompt = data.systemPrompt;
+    if (data.defaultModel !== undefined) updateData.defaultModel = data.defaultModel;
+    if (data.allowedTools !== undefined) updateData.allowedTools = JSON.stringify(data.allowedTools);
+    if (data.tags !== undefined) updateData.tags = JSON.stringify(data.tags);
 
-    return updated;
+    await this.db
+      .update(agents)
+      .set(updateData)
+      .where(eq(agents.id, id));
+
+    return await this.findById(id) as Agent;
   }
 
   async delete(id: string): Promise<void> {
@@ -610,7 +700,7 @@ export class SqliteAgentRepository implements AgentPort {
       throw new NotFoundError('Agent', id);
     }
 
-    // await this.db.delete(agentsTable).where(eq(agentsTable.id, id));
+    await this.db.delete(agents).where(eq(agents.id, id));
   }
 
   async exists(id: string): Promise<boolean> {
