@@ -148,6 +148,11 @@ export interface Agent {
   defaultModel: string;
   allowedTools: string[];
   tags: string[];
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -159,6 +164,11 @@ export interface CreateAgentData {
   defaultModel: string;
   allowedTools?: string[];
   tags?: string[];
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  };
 }
 
 export interface UpdateAgentData {
@@ -168,6 +178,11 @@ export interface UpdateAgentData {
   defaultModel?: string;
   allowedTools?: string[];
   tags?: string[];
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  };
 }
 
 export interface AgentQueryCriteria {

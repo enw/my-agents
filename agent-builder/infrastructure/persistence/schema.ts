@@ -20,6 +20,7 @@ export const agents = sqliteTable('agents', {
   defaultModel: text('default_model').notNull(),
   allowedTools: text('allowed_tools').notNull(), // JSON array as string
   tags: text('tags').notNull(), // JSON array as string
+  settings: text('settings').notNull().default('{}'), // JSON object: { temperature, maxTokens, topP }
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });

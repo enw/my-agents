@@ -16,16 +16,54 @@ export async function POST(request: NextRequest) {
     const container = await getContainer();
     
     if (stream) {
-      // For streaming, we'd need to set up SSE or WebSocket
-      // For now, return a non-streaming response
-      const useCase = container.useCases.executeAgent();
-      const runId = await useCase.execute({
-        agentId,
-        message,
-        modelOverride,
+      // Create SSE stream
+      const encoder = new TextEncoder();
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          try {
+            // Create streaming session and register the controller
+            const streamSessionId = await container.streamingPort.createSession();
+            (container.streamingPort as any).registerSession(streamSessionId, {
+              write: (data: string) => {
+                controller.enqueue(encoder.encode(data));
+              },
+              end: () => {
+                controller.close();
+              },
+            });
+
+            // Start execution in background
+            const useCase = container.useCases.executeAgentStream();
+            const sessionId = await useCase.execute({
+              agentId,
+              message,
+              modelOverride,
+            });
+
+            // Send initial message with session ID
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'session', sessionId })}\n\n`)
+            );
+
+            // The execution service will stream chunks via the streaming port
+            // We'll complete when the stream is done (handled by adapter)
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`)
+            );
+            controller.close();
+          }
+        },
       });
-      
-      return NextResponse.json({ runId, status: 'completed' });
+
+      return new Response(readableStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
     } else {
       const useCase = container.useCases.executeAgent();
       const runId = await useCase.execute({

@@ -78,7 +78,8 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     private modelRegistry: ModelRegistryPort,
     private toolPort: ToolPort,
     private tracePort: TracePort,
-    private streamingPort: StreamingPort
+    private streamingPort: StreamingPort,
+    private modelFactory: any // ModelFactory from infrastructure
   ) {}
 
   async execute(
@@ -381,11 +382,10 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
   }
 
   /**
-   * Get model adapter (placeholder - would use factory)
+   * Get model adapter using factory
    */
   private async getModelAdapter(modelId: string): Promise<ModelPort> {
-    // This would be injected via factory pattern
-    throw new Error('Model adapter factory not implemented');
+    return this.modelFactory.create(modelId);
   }
 }
 

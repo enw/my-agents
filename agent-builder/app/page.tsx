@@ -1,12 +1,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import ThemeToggle from './components/ThemeToggle';
 
 export default function Home() {
   const router = useRouter();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="text-center max-w-2xl px-4">
         <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           Local Agent Builder

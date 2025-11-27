@@ -186,7 +186,8 @@ export class DependencyContainer {
         this.modelRegistry,
         this.toolPort,
         this.tracePort,
-        this.streamingPort
+        this.streamingPort,
+        this.modelFactory
       );
     }
     return this._executionService;
@@ -285,6 +286,7 @@ async function registerTools(container: DependencyContainer, config: AppConfig) 
   const tools = createDefaultTools({
     sandboxRoot: config.sandboxRoot,
     workspaceRoot: config.workspaceRoot,
+    openRouterApiKey: config.openRouterApiKey,
   });
 
   await container.toolRegistryService.registerAllTools(tools);

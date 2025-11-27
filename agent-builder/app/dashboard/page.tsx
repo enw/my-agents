@@ -60,32 +60,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Agent Dashboard
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Manage your AI agents and view execution history
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Link
-              href="/"
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
-            >
-              Home
-            </Link>
-            <button
-              onClick={() => router.push('/dashboard/new')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              + New Agent
-            </button>
-          </div>
-        </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Agent Dashboard
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">
+          Manage your AI agents and view execution history
+        </p>
+      </div>
 
         {error && (
           <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg">
@@ -166,7 +149,6 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }

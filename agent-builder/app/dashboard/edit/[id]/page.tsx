@@ -12,6 +12,11 @@ interface Agent {
   defaultModel: string;
   allowedTools: string[];
   tags: string[];
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  };
 }
 
 interface Model {
@@ -43,6 +48,11 @@ export default function EditAgentPage() {
     defaultModel: '',
     allowedTools: [] as string[],
     tags: [] as string[],
+    settings: {
+      temperature: 0.7,
+      maxTokens: 4096,
+      topP: 1.0,
+    },
   });
 
   const [tagInput, setTagInput] = useState('');
@@ -67,6 +77,11 @@ export default function EditAgentPage() {
         defaultModel: agent.defaultModel,
         allowedTools: agent.allowedTools,
         tags: agent.tags,
+        settings: agent.settings || {
+          temperature: 0.7,
+          maxTokens: 4096,
+          topP: 1.0,
+        },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load agent');
@@ -162,8 +177,8 @@ export default function EditAgentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="p-6">
+      <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Link
             href="/dashboard"
@@ -267,6 +282,64 @@ export default function EditAgentPage() {
                   </div>
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Settings */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Model Settings
+            </label>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Temperature (0-2)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={formData.settings.temperature}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    settings: { ...prev.settings, temperature: parseFloat(e.target.value) || 0.7 }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Max Tokens
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.settings.maxTokens}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    settings: { ...prev.settings, maxTokens: parseInt(e.target.value) || 4096 }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Top P (0-1)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={formData.settings.topP}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    settings: { ...prev.settings, topP: parseFloat(e.target.value) || 1.0 }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                />
+              </div>
             </div>
           </div>
 

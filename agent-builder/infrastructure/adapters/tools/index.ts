@@ -600,6 +600,144 @@ export class OllamaInfoTool implements Tool {
 }
 
 // ============================================================================
+// WEB SEARCH TOOL - Search the Internet
+// ============================================================================
+
+export class SearchTool implements Tool {
+  name = 'web_search';
+  description = 'Search the web for information. Returns relevant search results with titles, URLs, and snippets.';
+
+  parameters: ToolParameterSchema = {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Search query',
+        required: true,
+      },
+      numResults: {
+        type: 'number',
+        description: 'Number of results to return (1-10, default: 5)',
+        required: false,
+      },
+    },
+    required: ['query'],
+  };
+
+  private openRouterApiKey?: string;
+
+  constructor(openRouterApiKey?: string) {
+    this.openRouterApiKey = openRouterApiKey;
+  }
+
+  async execute(parameters: Record<string, unknown>): Promise<ToolResult> {
+    const query = parameters.query as string;
+    const numResults = (parameters.numResults as number) || 5;
+
+    try {
+      // Use OpenRouter search if API key is available
+      if (this.openRouterApiKey) {
+        return await this.searchWithOpenRouter(query, numResults);
+      }
+
+      // Fallback: Use DuckDuckGo instant answer API (no key required)
+      return await this.searchWithDuckDuckGo(query, numResults);
+    } catch (error: any) {
+      return {
+        success: false,
+        output: `Search failed: ${error.message}`,
+        error: error.message,
+        executionTimeMs: 0,
+      };
+    }
+  }
+
+  private async searchWithOpenRouter(query: string, numResults: number): Promise<ToolResult> {
+    // OpenRouter doesn't have a direct search API, so we'll use DuckDuckGo
+    // In a real implementation, you might use Brave Search API or similar
+    return await this.searchWithDuckDuckGo(query, numResults);
+  }
+
+  private async searchWithDuckDuckGo(query: string, numResults: number): Promise<ToolResult> {
+    try {
+      // DuckDuckGo Instant Answer API (no key required, but limited)
+      const response = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+        {
+          headers: {
+            'User-Agent': 'LocalAgentBuilder/1.0',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Search API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Format results
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+
+      // Add instant answer if available
+      if (data.AbstractText) {
+        results.push({
+          title: data.Heading || query,
+          url: data.AbstractURL || '',
+          snippet: data.AbstractText,
+        });
+      }
+
+      // Add related topics
+      if (data.RelatedTopics) {
+        for (const topic of data.RelatedTopics.slice(0, numResults - results.length)) {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || topic.Text,
+              url: topic.FirstURL,
+              snippet: topic.Text,
+            });
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        return {
+          success: true,
+          output: `No results found for "${query}"`,
+          data: { query, results: [] },
+          executionTimeMs: 0,
+        };
+      }
+
+      const output = results
+        .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`)
+        .join('\n\n');
+
+      return {
+        success: true,
+        output: `Found ${results.length} results for "${query}":\n\n${output}`,
+        data: { query, results },
+        executionTimeMs: 0,
+      };
+    } catch (error: any) {
+      // Fallback: return a message that search is not available
+      return {
+        success: false,
+        output: `Web search is currently unavailable. Error: ${error.message}`,
+        error: error.message,
+        executionTimeMs: 0,
+      };
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    // Always available (uses public APIs)
+    return true;
+  }
+}
+
+// ============================================================================
 // TOOL REGISTRY - Auto-Registration
 // ============================================================================
 
@@ -609,6 +747,7 @@ export class OllamaInfoTool implements Tool {
 export function createDefaultTools(config: {
   sandboxRoot: string;
   workspaceRoot: string;
+  openRouterApiKey?: string;
 }): Tool[] {
   return [
     new ShellTool(config.sandboxRoot),
@@ -616,5 +755,6 @@ export function createDefaultTools(config: {
     new HttpTool(),
     new CodeExecutionTool(config.sandboxRoot),
     new OllamaInfoTool(),
+    new SearchTool(config.openRouterApiKey),
   ];
 }

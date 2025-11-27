@@ -36,8 +36,8 @@ import {
   ValidationError,
 } from '../../domain/ports';
 
-import { agents } from '../persistence/schema';
-import { eq, and, desc, asc, like, or, sql } from 'drizzle-orm';
+import { agents, runs, turns, toolExecutions } from '../persistence/schema';
+import { eq, and, desc, asc, like, or, sql, gte, lte } from 'drizzle-orm';
 
 // ============================================================================
 // MODEL ADAPTERS - LLM Provider Implementations
@@ -566,6 +566,7 @@ export class SqliteAgentRepository implements AgentPort {
       defaultModel: row.defaultModel,
       allowedTools: JSON.parse(row.allowedTools || '[]'),
       tags: JSON.parse(row.tags || '[]'),
+      settings: row.settings ? JSON.parse(row.settings) : undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -583,6 +584,7 @@ export class SqliteAgentRepository implements AgentPort {
       defaultModel: data.defaultModel,
       allowedTools: JSON.stringify(data.allowedTools || []),
       tags: JSON.stringify(data.tags || []),
+      settings: JSON.stringify(data.settings || {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -666,7 +668,7 @@ export class SqliteAgentRepository implements AgentPort {
 
     const results = await query.all();
 
-    return results.map(row => this.mapDbRowToAgent(row));
+    return results.map((row: any) => this.mapDbRowToAgent(row));
   }
 
   async update(id: string, data: UpdateAgentData): Promise<Agent> {
@@ -685,6 +687,7 @@ export class SqliteAgentRepository implements AgentPort {
     if (data.defaultModel !== undefined) updateData.defaultModel = data.defaultModel;
     if (data.allowedTools !== undefined) updateData.allowedTools = JSON.stringify(data.allowedTools);
     if (data.tags !== undefined) updateData.tags = JSON.stringify(data.tags);
+    if (data.settings !== undefined) updateData.settings = JSON.stringify(data.settings);
 
     await this.db
       .update(agents)
@@ -788,29 +791,30 @@ export class InMemoryToolRegistry implements ToolPort {
  * SSE (Server-Sent Events) Streaming Adapter
  */
 export class SSEStreamingAdapter implements StreamingPort {
-  private sessions = new Map<string, any>(); // Would be Response objects
+  private sessions = new Map<string, { write: (data: string) => void; end: () => void }>();
 
   async createSession(): Promise<string> {
     const sessionId = crypto.randomUUID();
-    // Session would be created when client connects
     return sessionId;
   }
 
   async send(sessionId: string, chunk: StreamChunk): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+      // Session might not be registered yet, that's okay
+      return;
     }
 
     // Send SSE event
-    // session.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    const data = `data: ${JSON.stringify(chunk)}\n\n`;
+    session.write(data);
   }
 
   async complete(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
-      // session.write('data: [DONE]\n\n');
-      // session.end();
+      session.write('data: [DONE]\n\n');
+      session.end();
       this.sessions.delete(sessionId);
     }
   }
@@ -823,12 +827,12 @@ export class SSEStreamingAdapter implements StreamingPort {
   async close(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
-      // session.end();
+      session.end();
       this.sessions.delete(sessionId);
     }
   }
 
-  registerSession(sessionId: string, session: any): void {
+  registerSession(sessionId: string, session: { write: (data: string) => void; end: () => void }): void {
     this.sessions.set(sessionId, session);
   }
 }
@@ -921,51 +925,336 @@ export class SqliteTraceRepository implements TracePort {
   constructor(private db: any) {} // Drizzle DB instance
 
   async createRun(data: { agentId: string; modelUsed: string }): Promise<Run> {
-    const run: Run = {
-      id: crypto.randomUUID(),
+    const id = crypto.randomUUID();
+    const now = new Date();
+
+    const dbRow = {
+      id,
+      agentId: data.agentId,
+      modelUsed: data.modelUsed,
+      status: 'running' as const,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalTokens: 0,
+      totalToolCalls: 0,
+      createdAt: now,
+      completedAt: null,
+      error: null,
+    };
+
+    await this.db.insert(runs).values(dbRow);
+
+    return {
+      id,
       agentId: data.agentId,
       modelUsed: data.modelUsed,
       status: 'running',
       turns: [],
       totalTokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       totalToolCalls: 0,
-      createdAt: new Date(),
+      createdAt: now,
     };
-
-    // Insert using Drizzle
-    // await this.db.insert(runsTable).values(run);
-
-    return run;
   }
 
   async appendTurn(runId: string, turn: Turn): Promise<void> {
-    // Insert turn record
-    // Update run aggregates (totalTokens, etc.)
-    throw new Error('Not implemented - requires Drizzle schema');
+    const now = new Date();
+
+    // Check if a temporary turn was already created for this turn number
+    const existingTurn = await this.db
+      .select()
+      .from(turns)
+      .where(
+        and(
+          eq(turns.runId, runId),
+          eq(turns.turnNumber, turn.turnNumber)
+        )
+      )
+      .get();
+
+    let turnId: string;
+
+    if (existingTurn && existingTurn.userMessage === '[Temporary]') {
+      // Update the temporary turn with actual data
+      turnId = existingTurn.id;
+      await this.db
+        .update(turns)
+        .set({
+          userMessage: turn.userMessage,
+          assistantMessage: turn.assistantMessage,
+          inputTokens: turn.usage.inputTokens,
+          outputTokens: turn.usage.outputTokens,
+          totalTokens: turn.usage.totalTokens,
+          timestamp: turn.timestamp || now,
+        })
+        .where(eq(turns.id, turnId));
+    } else {
+      // Create new turn record
+      turnId = crypto.randomUUID();
+      await this.db.insert(turns).values({
+        id: turnId,
+        runId,
+        turnNumber: turn.turnNumber,
+        userMessage: turn.userMessage,
+        assistantMessage: turn.assistantMessage,
+        inputTokens: turn.usage.inputTokens,
+        outputTokens: turn.usage.outputTokens,
+        totalTokens: turn.usage.totalTokens,
+        timestamp: turn.timestamp || now,
+      });
+    }
+
+    // Ensure all tool executions from the turn are logged
+    // (they may have been logged individually before this turn was created)
+    for (const toolExec of turn.toolExecutions) {
+      const existing = await this.db
+        .select()
+        .from(toolExecutions)
+        .where(eq(toolExecutions.id, toolExec.id))
+        .get();
+
+      if (!existing) {
+        // Insert if not already logged
+        await this.db.insert(toolExecutions).values({
+          id: toolExec.id,
+          runId,
+          turnId,
+          toolName: toolExec.toolName,
+          parameters: JSON.stringify(toolExec.parameters),
+          success: toolExec.result.success,
+          output: toolExec.result.output || '',
+          data: toolExec.result.data ? JSON.stringify(toolExec.result.data) : null,
+          error: toolExec.result.error || null,
+          executionTimeMs: toolExec.result.executionTimeMs || 0,
+          timestamp: toolExec.timestamp,
+        });
+      } else if (existing.turnId !== turnId) {
+        // Update turnId if it was pointing to a temporary turn
+        await this.db
+          .update(toolExecutions)
+          .set({ turnId })
+          .where(eq(toolExecutions.id, toolExec.id));
+      }
+    }
+
+    // Update run aggregates
+    const run = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
+    if (run) {
+      await this.db
+        .update(runs)
+        .set({
+          totalInputTokens: run.totalInputTokens + turn.usage.inputTokens,
+          totalOutputTokens: run.totalOutputTokens + turn.usage.outputTokens,
+          totalTokens: run.totalTokens + turn.usage.totalTokens,
+          totalToolCalls: run.totalToolCalls + turn.toolExecutions.length,
+        })
+        .where(eq(runs.id, runId));
+    }
   }
 
   async logToolExecution(runId: string, execution: ToolExecution): Promise<void> {
-    // Insert tool execution record
-    throw new Error('Not implemented - requires Drizzle schema');
+    // Tool executions are logged BEFORE the turn is appended in the execution service.
+    // Find the latest turn for this run, or create a temporary turn if none exists.
+    const latestTurn = await this.db
+      .select()
+      .from(turns)
+      .where(eq(turns.runId, runId))
+      .orderBy(desc(turns.turnNumber))
+      .limit(1)
+      .get();
+
+    let turnId: string;
+    
+    if (latestTurn) {
+      // Use the latest turn
+      turnId = latestTurn.id;
+    } else {
+      // No turns yet - create a temporary turn record for turn 1
+      // This will be updated when appendTurn is called with the actual turn data
+      turnId = crypto.randomUUID();
+      await this.db.insert(turns).values({
+        id: turnId,
+        runId,
+        turnNumber: 1, // Will be updated if different
+        userMessage: '[Temporary]', // Will be updated
+        assistantMessage: '[Temporary]', // Will be updated
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        timestamp: new Date(),
+      });
+    }
+
+    await this.db.insert(toolExecutions).values({
+      id: execution.id,
+      runId,
+      turnId,
+      toolName: execution.toolName,
+      parameters: JSON.stringify(execution.parameters),
+      success: execution.result.success,
+      output: execution.result.output || '',
+      data: execution.result.data ? JSON.stringify(execution.result.data) : null,
+      error: execution.result.error || null,
+      executionTimeMs: execution.result.executionTimeMs || 0,
+      timestamp: execution.timestamp,
+    });
   }
 
   async updateRunStatus(runId: string, status: RunStatus, error?: string): Promise<void> {
-    // Update run status and completedAt
-    throw new Error('Not implemented - requires Drizzle schema');
+    const updateData: any = {
+      status,
+    };
+
+    if (status === 'completed' || status === 'error') {
+      updateData.completedAt = new Date();
+    }
+
+    if (error) {
+      updateData.error = error;
+    }
+
+    await this.db.update(runs).set(updateData).where(eq(runs.id, runId));
   }
 
   async getRun(runId: string): Promise<Run | null> {
-    // Fetch run with all turns and tool executions
-    throw new Error('Not implemented - requires Drizzle schema');
+    const runRow = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
+    if (!runRow) {
+      return null;
+    }
+
+    // Fetch all turns for this run
+    const turnRows = await this.db
+      .select()
+      .from(turns)
+      .where(eq(turns.runId, runId))
+      .orderBy(asc(turns.turnNumber))
+      .all() as any[];
+
+    // Fetch all tool executions for this run
+    const toolExecutionRows = await this.db
+      .select()
+      .from(toolExecutions)
+      .where(eq(toolExecutions.runId, runId))
+      .all();
+
+    // Group tool executions by turn
+    const toolExecutionsByTurn = new Map<string, ToolExecution[]>();
+    for (const toolRow of toolExecutionRows) {
+      if (!toolExecutionsByTurn.has(toolRow.turnId)) {
+        toolExecutionsByTurn.set(toolRow.turnId, []);
+      }
+      toolExecutionsByTurn.get(toolRow.turnId)!.push({
+        id: toolRow.id,
+        toolName: toolRow.toolName,
+        parameters: JSON.parse(toolRow.parameters || '{}'),
+        result: {
+          success: toolRow.success,
+          output: toolRow.output,
+          data: toolRow.data ? JSON.parse(toolRow.data) : undefined,
+          error: toolRow.error || undefined,
+          executionTimeMs: toolRow.executionTimeMs,
+        },
+        timestamp: toolRow.timestamp,
+      });
+    }
+
+    // Build turns with tool executions
+    const turnsArray: Turn[] = turnRows.map((turnRow: any) => ({
+      turnNumber: turnRow.turnNumber,
+      userMessage: turnRow.userMessage,
+      assistantMessage: turnRow.assistantMessage,
+      toolExecutions: toolExecutionsByTurn.get(turnRow.id) || [],
+      usage: {
+        inputTokens: turnRow.inputTokens,
+        outputTokens: turnRow.outputTokens,
+        totalTokens: turnRow.totalTokens,
+      },
+      timestamp: turnRow.timestamp,
+    }));
+
+    return {
+      id: runRow.id,
+      agentId: runRow.agentId,
+      modelUsed: runRow.modelUsed,
+      status: runRow.status as RunStatus,
+      turns: turnsArray,
+      totalTokens: {
+        inputTokens: runRow.totalInputTokens,
+        outputTokens: runRow.totalOutputTokens,
+        totalTokens: runRow.totalTokens,
+      },
+      totalToolCalls: runRow.totalToolCalls,
+      createdAt: runRow.createdAt,
+      completedAt: runRow.completedAt || undefined,
+      error: runRow.error || undefined,
+    };
   }
 
   async queryRuns(criteria: RunQueryCriteria): Promise<Run[]> {
-    // Build dynamic query
-    throw new Error('Not implemented - requires Drizzle schema');
+    const conditions = [];
+
+    if (criteria.agentId) {
+      conditions.push(eq(runs.agentId, criteria.agentId));
+    }
+
+    if (criteria.status) {
+      conditions.push(eq(runs.status, criteria.status));
+    }
+
+    if (criteria.fromDate) {
+      conditions.push(gte(runs.createdAt, criteria.fromDate));
+    }
+
+    if (criteria.toDate) {
+      conditions.push(lte(runs.createdAt, criteria.toDate));
+    }
+
+    let query = this.db.select().from(runs);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    query = query.orderBy(desc(runs.createdAt));
+
+    const limit = criteria.limit || 50;
+    const offset = criteria.offset || 0;
+    query = query.limit(limit).offset(offset);
+
+    const runRows = await query.all();
+
+    // Fetch all runs with their turns and tool executions
+    const results: Run[] = [];
+    for (const runRow of runRows) {
+      const run = await this.getRun(runRow.id);
+      if (run) {
+        results.push(run);
+      }
+    }
+
+    return results;
   }
 
   async getToolStats(agentId: string): Promise<any[]> {
-    // Aggregate tool execution statistics
-    throw new Error('Not implemented - requires Drizzle schema');
+    const stats = await this.db
+      .select({
+        toolName: toolExecutions.toolName,
+        totalExecutions: sql<number>`COUNT(*)`,
+        successfulExecutions: sql<number>`SUM(CASE WHEN ${toolExecutions.success} = 1 THEN 1 ELSE 0 END)`,
+        successRate: sql<number>`CAST(SUM(CASE WHEN ${toolExecutions.success} = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100`,
+        avgExecutionTime: sql<number>`AVG(${toolExecutions.executionTimeMs})`,
+      })
+      .from(toolExecutions)
+      .innerJoin(runs, eq(toolExecutions.runId, runs.id))
+      .where(eq(runs.agentId, agentId))
+      .groupBy(toolExecutions.toolName)
+      .all();
+
+    return stats.map((stat: any) => ({
+      toolName: stat.toolName,
+      totalExecutions: stat.totalExecutions,
+      successfulExecutions: stat.successfulExecutions,
+      successRate: stat.successRate,
+      avgExecutionTime: stat.avgExecutionTime,
+    }));
   }
 }
