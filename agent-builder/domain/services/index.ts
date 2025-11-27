@@ -20,7 +20,7 @@ import {
   Turn,
   UnauthorizedToolError,
   ValidationError,
-} from './ports';
+} from '../ports';
 
 // ============================================================================
 // AGENT EXECUTION SERVICE - Core Business Logic

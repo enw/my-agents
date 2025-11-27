@@ -17,13 +17,13 @@ import {
   TracePort,
   UpdateAgentData,
   ValidationError,
-} from './ports';
+} from '../../domain/ports';
 
 import {
   AgentExecutionService,
   AgentValidationService,
   ExecutionOptions,
-} from './domain-services';
+} from '../../domain/services';
 
 // ============================================================================
 // AGENT MANAGEMENT USE CASES

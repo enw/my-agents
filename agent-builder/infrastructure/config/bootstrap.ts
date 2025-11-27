@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
-import * as schema from './schema';
+import * as schema from '../persistence/schema';
 
 import {
   AgentPort,
@@ -15,7 +15,7 @@ import {
   StreamingPort,
   ToolPort,
   TracePort,
-} from './ports';
+} from '../../domain/ports';
 
 import {
   DefaultModelRegistry,
@@ -24,18 +24,18 @@ import {
   SqliteAgentRepository,
   SqliteTraceRepository,
   SSEStreamingAdapter,
-} from './adapters';
+} from '../adapters';
 
 import {
   AgentExecutionService,
   AgentValidationService,
   DefaultAgentExecutionService,
   ToolRegistryService,
-} from './domain-services';
+} from '../../domain/services';
 
-import { UseCaseFactory } from './use-cases';
+import { UseCaseFactory } from '../../application/use-cases';
 
-import { createDefaultTools } from './tools';
+import { createDefaultTools } from '../adapters/tools/index';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -362,7 +362,7 @@ export async function getContainer(): Promise<DependencyContainer> {
  * Seed database with sample data (development only)
  */
 export async function seedDatabase(container: DependencyContainer) {
-  const { sampleAgents } = await import('./schema');
+  const { sampleAgents } = await import('../persistence/schema');
 
   for (const agentData of sampleAgents) {
     try {

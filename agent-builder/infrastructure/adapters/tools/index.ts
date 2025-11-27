@@ -10,7 +10,7 @@
  * - HTTP tool: respects rate limits and timeouts
  */
 
-import { Tool, ToolResult, ToolParameterSchema } from './ports';
+import { Tool, ToolResult, ToolParameterSchema } from '../../../domain/ports';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';

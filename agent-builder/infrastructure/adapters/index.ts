@@ -34,7 +34,7 @@ import {
   UpdateAgentData,
   UsageMetrics,
   ValidationError,
-} from './ports';
+} from '../../domain/ports';
 
 // ============================================================================
 // MODEL ADAPTERS - LLM Provider Implementations
