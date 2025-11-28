@@ -3,12 +3,13 @@ import { getContainer } from '../../../../infrastructure/config/bootstrap';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const container = await getContainer();
     const useCase = container.useCases.getRun();
-    const run = await useCase.execute(params.id);
+    const run = await useCase.execute(id);
 
     return NextResponse.json(run);
   } catch (error) {
