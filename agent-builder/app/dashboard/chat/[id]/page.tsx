@@ -37,6 +37,8 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [previousRuns, setPreviousRuns] = useState<any[]>([]);
   const [showRunSelector, setShowRunSelector] = useState(false);
+  const [currentRunIndex, setCurrentRunIndex] = useState<number>(-1); // -1 means viewing latest/new conversation
+  const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -49,11 +51,14 @@ export default function ChatPage() {
 
   // Load messages from the most recent run when agent loads
   useEffect(() => {
-    if (agent && messages.length === 0) {
+    if (agent && allRuns.length > 0 && currentRunIndex === -1) {
+      loadRunByIndex(0); // Load the latest run
+    } else if (agent && messages.length === 0 && allRuns.length === 0) {
+      // Fallback if runs haven't loaded yet
       loadLatestRunMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent]);
+  }, [agent, allRuns]);
 
   async function loadLatestRunMessages() {
     try {
@@ -61,28 +66,33 @@ export default function ChatPage() {
       if (response.ok) {
         const runs = await response.json();
         if (runs.length > 0) {
-          const latestRun = runs[0];
-          const runResponse = await fetch(`/api/runs/${latestRun.id}`);
-          if (runResponse.ok) {
-            const run = await runResponse.json();
-            setCurrentRun(run);
-            
-            // Build messages from run turns
-            const runMessages: Message[] = [];
-            if (run.turns && run.turns.length > 0) {
-              run.turns.forEach((turn: any) => {
-                runMessages.push({
-                  role: 'user',
-                  content: turn.userMessage,
-                  timestamp: new Date(turn.timestamp),
+          // Use the navigation function instead
+          if (allRuns.length > 0) {
+            loadRunByIndex(0);
+          } else {
+            // Fallback if allRuns not loaded yet
+            const latestRun = runs[0];
+            const runResponse = await fetch(`/api/runs/${latestRun.id}`);
+            if (runResponse.ok) {
+              const run = await runResponse.json();
+              setCurrentRun(run);
+              
+              const runMessages: Message[] = [];
+              if (run.turns && run.turns.length > 0) {
+                run.turns.forEach((turn: any) => {
+                  runMessages.push({
+                    role: 'user',
+                    content: turn.userMessage,
+                    timestamp: new Date(turn.timestamp),
+                  });
+                  runMessages.push({
+                    role: 'assistant',
+                    content: turn.assistantMessage || '',
+                    timestamp: new Date(turn.timestamp),
+                  });
                 });
-                runMessages.push({
-                  role: 'assistant',
-                  content: turn.assistantMessage || '',
-                  timestamp: new Date(turn.timestamp),
-                });
-              });
-              setMessages(runMessages);
+                setMessages(runMessages);
+              }
             }
           }
         }
@@ -92,12 +102,85 @@ export default function ChatPage() {
     }
   }
 
+  async function loadRunByIndex(index: number) {
+    if (index < 0 || index >= allRuns.length) return;
+    
+    try {
+      const run = allRuns[index];
+      const runResponse = await fetch(`/api/runs/${run.id}`);
+      if (runResponse.ok) {
+        const runData = await runResponse.json();
+        setCurrentRun(runData);
+        setCurrentRunIndex(index);
+        
+        // Build messages from run turns
+        const runMessages: Message[] = [];
+        if (runData.turns && runData.turns.length > 0) {
+          runData.turns.forEach((turn: any) => {
+            runMessages.push({
+              role: 'user',
+              content: turn.userMessage,
+              timestamp: new Date(turn.timestamp),
+            });
+            runMessages.push({
+              role: 'assistant',
+              content: turn.assistantMessage || '',
+              timestamp: new Date(turn.timestamp),
+            });
+          });
+          setMessages(runMessages);
+        } else {
+          setMessages([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load run:', err);
+    }
+  }
+
+  function goToPreviousRun() {
+    if (currentRunIndex > 0) {
+      loadRunByIndex(currentRunIndex - 1);
+    }
+  }
+
+  function goToNextRun() {
+    if (currentRunIndex < allRuns.length - 1) {
+      loadRunByIndex(currentRunIndex + 1);
+    }
+  }
+
+  function goToLatestRun() {
+    if (allRuns.length > 0) {
+      loadRunByIndex(0);
+    }
+  }
+
+  async function fetchRunDetails(runId: string) {
+    try {
+      const response = await fetch(`/api/runs/${runId}`);
+      if (response.ok) {
+        const run = await response.json();
+        setCurrentRun(run);
+      }
+    } catch (err) {
+      console.error('Failed to fetch run details:', err);
+    }
+  }
+
   async function loadPreviousRuns() {
     try {
-      const response = await fetch(`/api/runs?agentId=${agentId}&limit=10`);
+      const response = await fetch(`/api/runs?agentId=${agentId}&limit=100`); // Load more runs for navigation
       if (response.ok) {
         const data = await response.json();
-        setPreviousRuns(data.filter((run: any) => run.status === 'completed'));
+        const completedRuns = data.filter((run: any) => run.status === 'completed');
+        setAllRuns(completedRuns);
+        setPreviousRuns(completedRuns.slice(0, 10)); // Keep for modal
+        
+        // Set current run index to 0 (most recent) if we have runs
+        if (completedRuns.length > 0 && currentRunIndex === -1) {
+          setCurrentRunIndex(0);
+        }
       }
     } catch (err) {
       console.error('Failed to load previous runs:', err);
@@ -206,6 +289,9 @@ export default function ChatPage() {
     setInput('');
     setLoading(true);
     setError(null);
+    
+    // Reset to latest conversation when sending new message
+    setCurrentRunIndex(-1);
 
     try {
       // Try streaming first
@@ -379,136 +465,177 @@ export default function ChatPage() {
       <div className={`flex-1 flex flex-col transition-all ${showTrace ? 'mr-80' : ''}`}>
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-            <div>
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between mb-2">
               <Link
                 href="/dashboard"
-                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm mb-1 block"
+                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
               >
                 ← Back to Dashboard
               </Link>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {agent.name}
-              </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {agent.description}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
-                Model Override
-              </label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                disabled={loading}
-              >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.displayName} ({model.provider})
-                  </option>
-                ))}
-              </select>
+              {/* Navigation Controls */}
+              {allRuns.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goToPreviousRun}
+                    disabled={currentRunIndex <= 0}
+                    className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Previous conversation"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
+                    {currentRunIndex >= 0 ? (
+                      `Conversation ${currentRunIndex + 1} of ${allRuns.length}`
+                    ) : (
+                      'Latest'
+                    )}
+                  </span>
+                  <button
+                    onClick={goToNextRun}
+                    disabled={currentRunIndex >= allRuns.length - 1}
+                    className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Next conversation"
+                  >
+                    Next →
+                  </button>
+                  {currentRunIndex !== 0 && (
+                    <button
+                      onClick={goToLatestRun}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                      title="Go to latest conversation"
+                    >
+                      Latest
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowRunSelector(!showRunSelector)}
-                className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                title="Continue previous conversation"
-              >
-                Continue Run
-              </button>
-              <ThemeToggle />
-              <button
-                onClick={() => setShowTrace(!showTrace)}
-                className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-              >
-                {showTrace ? 'Hide' : 'Show'} Trace
-              </button>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {agent.name}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {agent.description}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                    Model Override
+                  </label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    disabled={loading}
+                  >
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.displayName} ({model.provider})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowRunSelector(!showRunSelector)}
+                    className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                    title="Continue previous conversation"
+                  >
+                    Continue Run
+                  </button>
+                  <ThemeToggle />
+                  <button
+                    onClick={() => setShowTrace(!showTrace)}
+                    className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
+                    {showTrace ? 'Hide' : 'Show'} Trace
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6">
-        {messages.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Start a conversation with {agent.name}
-            </p>
-            <button
-              onClick={() => inputRef.current?.focus()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl"
-            >
-              Start Chatting
-            </button>
-          </div>
-        )}
-        
-        <div className="space-y-4">
-          {messages.map((message, idx) => (
-            <div
-              key={idx}
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              <div
-                className={`max-w-3xl rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
-                }`}
+          {messages.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Start a conversation with {agent.name}
+              </p>
+              <button
+                onClick={() => inputRef.current?.focus()}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl"
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                <p
-                  className={`text-xs mt-1 ${
-                    message.role === 'user'
-                      ? 'text-blue-100'
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}
-                >
-                  {message.timestamp.toLocaleTimeString()}
-                </p>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          {error && (
-            <div className="mb-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded text-sm">
-              {error}
+                Start Chatting
+              </button>
             </div>
           )}
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              placeholder="Type your message..."
-              disabled={loading}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            />
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {loading ? 'Sending...' : 'Send'}
-            </button>
+          
+          <div className="space-y-4">
+            {messages.map((message, idx) => (
+              <div
+                key={idx}
+                className={`flex ${
+                  message.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                <div
+                  className={`max-w-3xl rounded-lg px-4 py-2 ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p
+                    className={`text-xs mt-1 ${
+                      message.role === 'user'
+                        ? 'text-blue-100'
+                        : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                  >
+                    {message.timestamp.toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
         </div>
-      </div>
+
+        {/* Input */}
+        <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            {error && (
+              <div className="mb-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded text-sm">
+                {error}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                placeholder="Type your message..."
+                disabled={loading}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <button
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Run Selector Modal */}
