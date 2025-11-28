@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1763846837725,
+      "tag": "0000_living_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1764277271783,
+      "tag": "0001_lethal_loa",
+      "breakpoints": true
+    }
+  ]
+}

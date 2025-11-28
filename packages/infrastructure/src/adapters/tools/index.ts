@@ -53,8 +53,14 @@ export class ShellTool implements Tool {
     const command = parameters.command as string;
     const workingDir = parameters.workingDir as string | undefined;
 
+    console.log(`[SHELL TOOL] Executing command: ${command}`, {
+      workingDir,
+      sandboxRoot: this.sandboxRoot,
+    });
+
     try {
       // Ensure sandbox directory exists
+      console.log(`[SHELL TOOL] Ensuring sandbox directory exists...`);
       await fs.mkdir(this.sandboxRoot, { recursive: true });
 
       // Resolve working directory within sandbox
@@ -64,6 +70,7 @@ export class ShellTool implements Tool {
 
       // Security check: prevent directory traversal
       if (!cwd.startsWith(this.sandboxRoot)) {
+        console.error(`[SHELL TOOL] Security violation: directory traversal attempt`);
         return {
           success: false,
           output: 'Security violation: attempted directory traversal',
@@ -73,10 +80,17 @@ export class ShellTool implements Tool {
       }
 
       // Execute command with timeout (10 seconds)
+      console.log(`[SHELL TOOL] Executing command with 10s timeout...`);
+      const execStartTime = Date.now();
       const { stdout, stderr } = await execAsync(command, {
         cwd,
         timeout: 10000,
         maxBuffer: 1024 * 1024, // 1MB max output
+      });
+      const execDuration = Date.now() - execStartTime;
+      console.log(`[SHELL TOOL] Command completed in ${execDuration}ms`, {
+        stdoutLength: stdout?.length || 0,
+        stderrLength: stderr?.length || 0,
       });
 
       return {
@@ -86,6 +100,11 @@ export class ShellTool implements Tool {
         executionTimeMs: 0, // Will be set by caller
       };
     } catch (error: any) {
+      console.error(`[SHELL TOOL] Command execution failed:`, {
+        error: error.message,
+        code: error.code,
+        signal: error.signal,
+      });
       return {
         success: false,
         output: `Command failed: ${error.message}`,
@@ -304,10 +323,18 @@ export class HttpTool implements Tool {
     const headers = (parameters.headers as Record<string, string>) || {};
     const body = parameters.body as string | undefined;
 
+    console.log(`[HTTP TOOL] Making ${method} request to: ${url}`, {
+      hasHeaders: Object.keys(headers).length > 0,
+      hasBody: !!body,
+      bodyLength: body?.length || 0,
+      timeout: this.maxTimeout,
+    });
+
     try {
       // Basic URL validation
       const parsedUrl = new URL(url);
       if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        console.error(`[HTTP TOOL] Invalid protocol: ${parsedUrl.protocol}`);
         return {
           success: false,
           output: 'Only HTTP and HTTPS protocols are allowed',
@@ -317,8 +344,10 @@ export class HttpTool implements Tool {
       }
 
       // Make request with timeout
+      console.log(`[HTTP TOOL] Starting fetch with ${this.maxTimeout}ms timeout...`);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.maxTimeout);
+      const fetchStartTime = Date.now();
 
       const response = await fetch(url, {
         method,
@@ -328,10 +357,19 @@ export class HttpTool implements Tool {
       });
 
       clearTimeout(timeout);
+      const fetchDuration = Date.now() - fetchStartTime;
+      console.log(`[HTTP TOOL] Fetch completed in ${fetchDuration}ms`, {
+        status: response.status,
+        statusText: response.statusText,
+      });
 
       // Read response with size limit
+      console.log(`[HTTP TOOL] Reading response body...`);
       const text = await response.text();
+      console.log(`[HTTP TOOL] Response body read: ${text.length} bytes`);
+      
       if (text.length > this.maxResponseSize) {
+        console.error(`[HTTP TOOL] Response too large: ${text.length} bytes`);
         return {
           success: false,
           output: `Response too large (${text.length} bytes, max ${this.maxResponseSize})`,
@@ -344,8 +382,10 @@ export class HttpTool implements Tool {
       let data;
       try {
         data = JSON.parse(text);
+        console.log(`[HTTP TOOL] Response parsed as JSON`);
       } catch {
         data = text;
+        console.log(`[HTTP TOOL] Response kept as text`);
       }
 
       return {
@@ -363,6 +403,12 @@ export class HttpTool implements Tool {
         executionTimeMs: 0,
       };
     } catch (error: any) {
+      console.error(`[HTTP TOOL] Request failed:`, {
+        error: error.message,
+        name: error.name,
+        code: error.code,
+      });
+      
       if (error.name === 'AbortError') {
         return {
           success: false,
@@ -423,24 +469,39 @@ export class CodeExecutionTool implements Tool {
     const language = parameters.language as string;
     const code = parameters.code as string;
 
+    console.log(`[CODE EXEC TOOL] Executing ${language} code`, {
+      codeLength: code.length,
+      sandboxRoot: this.sandboxRoot,
+    });
+
     try {
       // Write code to temporary file
+      console.log(`[CODE EXEC TOOL] Creating sandbox directory...`);
       await fs.mkdir(this.sandboxRoot, { recursive: true });
       const filename = `script_${Date.now()}.${this.getExtension(language)}`;
       const scriptPath = path.join(this.sandboxRoot, filename);
 
+      console.log(`[CODE EXEC TOOL] Writing code to file: ${filename}`);
       await fs.writeFile(scriptPath, code, 'utf-8');
 
       // Execute based on language
       const command = this.getExecutionCommand(language, scriptPath);
+      console.log(`[CODE EXEC TOOL] Executing command: ${command} (30s timeout)`);
 
+      const execStartTime = Date.now();
       const { stdout, stderr } = await execAsync(command, {
         cwd: this.sandboxRoot,
         timeout: 30000, // 30 second timeout
         maxBuffer: 1024 * 1024, // 1MB max output
       });
+      const execDuration = Date.now() - execStartTime;
+      console.log(`[CODE EXEC TOOL] Code execution completed in ${execDuration}ms`, {
+        stdoutLength: stdout?.length || 0,
+        stderrLength: stderr?.length || 0,
+      });
 
       // Clean up
+      console.log(`[CODE EXEC TOOL] Cleaning up script file...`);
       await fs.unlink(scriptPath);
 
       return {
@@ -450,6 +511,12 @@ export class CodeExecutionTool implements Tool {
         executionTimeMs: 0,
       };
     } catch (error: any) {
+      console.error(`[CODE EXEC TOOL] Code execution failed:`, {
+        error: error.message,
+        code: error.code,
+        signal: error.signal,
+        language,
+      });
       return {
         success: false,
         output: `Code execution failed: ${error.message}`,

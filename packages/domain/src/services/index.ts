@@ -87,27 +87,48 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     userMessage: string,
     options: ExecutionOptions = {}
   ): Promise<string> {
+    console.log(`[AGENT EXECUTION] ========== EXECUTE METHOD CALLED ==========`);
+    console.log(`[AGENT EXECUTION] Starting execute for agentId: ${agentId}`, {
+      messageLength: userMessage.length,
+      modelOverride: options.modelOverride,
+      maxTurns: options.maxTurns,
+      hasStreamSession: !!options.streamSessionId,
+      timestamp: new Date().toISOString(),
+    });
+
     // 1. Load agent configuration
+    console.log(`[AGENT EXECUTION] Loading agent configuration...`);
     const agent = await this.agentPort.findById(agentId);
     if (!agent) {
+      console.error(`[AGENT EXECUTION] Agent ${agentId} not found`);
       throw new ValidationError(`Agent ${agentId} not found`);
     }
+    console.log(`[AGENT EXECUTION] Agent loaded: ${agent.name}`, {
+      defaultModel: agent.defaultModel,
+      allowedTools: agent.allowedTools.length,
+    });
 
     // 2. Validate and get model
     const modelId = options.modelOverride || agent.defaultModel;
+    console.log(`[AGENT EXECUTION] Getting model info for: ${modelId}`);
     const modelInfo = await this.modelRegistry.getModelInfo(modelId);
     if (!modelInfo) {
+      console.error(`[AGENT EXECUTION] Model ${modelId} not found`);
       throw new ValidationError(`Model ${modelId} not found`);
     }
+    console.log(`[AGENT EXECUTION] Model info loaded: ${modelInfo.name}`);
 
     // 3. Create run trace
+    console.log(`[AGENT EXECUTION] Creating run trace...`);
     const run = await this.tracePort.createRun({
       agentId: agent.id,
       modelUsed: modelId,
     });
+    console.log(`[AGENT EXECUTION] Run created with ID: ${run.id}`);
 
     // If streaming, send runId to client
     if (options.streamSessionId) {
+      console.log(`[AGENT EXECUTION] Sending run_created event to stream session: ${options.streamSessionId}`);
       await this.streamingPort.send(options.streamSessionId, {
         type: 'run_created',
         runId: run.id,
@@ -115,10 +136,13 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     }
 
     // 4. Execute agent loop
+    console.log(`[AGENT EXECUTION] Starting agent loop for runId: ${run.id}`);
     try {
       await this.executeAgentLoop(agent, run.id, userMessage, modelInfo.id, options);
+      console.log(`[AGENT EXECUTION] Agent loop completed successfully for runId: ${run.id}`);
       await this.tracePort.updateRunStatus(run.id, 'completed');
     } catch (error) {
+      console.error(`[AGENT EXECUTION] Agent loop error for runId ${run.id}:`, error);
       await this.tracePort.updateRunStatus(
         run.id,
         'error',
@@ -127,6 +151,7 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       throw error;
     }
 
+    console.log(`[AGENT EXECUTION] Execute completed for runId: ${run.id}`);
     return run.id;
   }
 
@@ -135,21 +160,35 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     userMessage: string,
     options: ExecutionOptions = {}
   ): Promise<string> {
+    console.log(`[AGENT EXECUTION] executeStream called`, {
+      agentId,
+      userMessageLength: userMessage.length,
+      hasStreamSessionId: !!options.streamSessionId,
+      timestamp: new Date().toISOString(),
+    });
+
     // Create streaming session if not provided
+    console.log(`[AGENT EXECUTION] Creating/getting stream session...`);
     const streamSessionId =
       options.streamSessionId || (await this.streamingPort.createSession());
+    console.log(`[AGENT EXECUTION] Stream session ID: ${streamSessionId}`);
 
     // Execute in background, stream results
+    console.log(`[AGENT EXECUTION] Starting background execute() call...`);
     this.execute(agentId, userMessage, {
       ...options,
       streamSessionId,
+    }).then(() => {
+      console.log(`[AGENT EXECUTION] Background execute() completed successfully`);
     }).catch(async (error) => {
+      console.error(`[AGENT EXECUTION] Background execute() failed:`, error);
       await this.streamingPort.error(
         streamSessionId,
         error instanceof Error ? error.message : 'Unknown error'
       );
     });
 
+    console.log(`[AGENT EXECUTION] executeStream returning sessionId: ${streamSessionId}`);
     return streamSessionId;
   }
 
@@ -198,16 +237,28 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     const conversationHistory = options.conversationHistory || [];
     const streamSessionId = options.streamSessionId;
 
+    console.log(`[AGENT LOOP] Initializing loop for runId: ${runId}`, {
+      agentName: agent.name,
+      modelId,
+      maxTurns,
+      conversationHistoryLength: conversationHistory.length,
+      hasStreamSession: !!streamSessionId,
+    });
+
     // Get model adapter
+    console.log(`[AGENT LOOP] Getting model adapter for: ${modelId}`);
     const model = await this.getModelAdapter(modelId);
+    console.log(`[AGENT LOOP] Model adapter ready`);
 
     // Get allowed tools for this agent
+    console.log(`[AGENT LOOP] Loading tools (${agent.allowedTools.length} allowed)`);
     const allowedTools = this.toolPort.listByNames(agent.allowedTools);
     const toolDefinitions = allowedTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
     }));
+    console.log(`[AGENT LOOP] Tools loaded: ${toolDefinitions.map(t => t.name).join(', ')}`);
 
     // Start conversation
     const messages: Message[] = [
@@ -218,14 +269,29 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     let turnNumber = conversationHistory.length / 2 + 1; // Approximate
     let continueLoop = true;
 
+    console.log(`[AGENT LOOP] Starting loop with turnNumber: ${turnNumber}, maxTurns: ${maxTurns}`);
+
     while (continueLoop && turnNumber <= maxTurns) {
+      console.log(`[AGENT LOOP] ===== Turn ${turnNumber}/${maxTurns} =====`, {
+        runId,
+        timestamp: new Date().toISOString(),
+      });
+      
       // Call LLM
+      console.log(`[AGENT LOOP] Preparing LLM request...`, {
+        messageCount: messages.length,
+        hasTools: toolDefinitions.length > 0,
+        systemPromptLength: agent.systemPrompt.length,
+      });
+      
       const request: GenerateRequest = {
         systemPrompt: agent.systemPrompt,
         messages,
         tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
       };
 
+      console.log(`[AGENT LOOP] Calling LLM (${streamSessionId ? 'streaming' : 'non-streaming'})...`);
+      const llmStartTime = Date.now();
       let response;
       if (streamSessionId) {
         response = await this.executeWithStreaming(
@@ -236,6 +302,12 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       } else {
         response = await model.generate(request);
       }
+      const llmDuration = Date.now() - llmStartTime;
+      console.log(`[AGENT LOOP] LLM response received (${llmDuration}ms)`, {
+        contentLength: response.content?.length || 0,
+        toolCallsCount: response.toolCalls?.length || 0,
+        usage: response.usage,
+      });
 
       // Add assistant message to history
       messages.push({
@@ -247,17 +319,30 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       // Execute tools if requested
       const toolExecutions = [];
       if (response.toolCalls.length > 0) {
+        console.log(`[AGENT LOOP] Executing ${response.toolCalls.length} tool call(s)...`);
         for (const toolCall of response.toolCalls) {
+          console.log(`[AGENT LOOP] Executing tool: ${toolCall.name}`, {
+            toolCallId: toolCall.id,
+            parameters: JSON.stringify(toolCall.parameters),
+          });
+          
           // Security check: verify tool is allowed
           if (!agent.allowedTools.includes(toolCall.name)) {
+            console.error(`[AGENT LOOP] Unauthorized tool: ${toolCall.name} not in allowedTools`);
             throw new UnauthorizedToolError(toolCall.name, agent.id);
           }
 
           // Execute tool
+          const toolStartTime = Date.now();
           const toolResult = await this.toolPort.execute(
             toolCall.name,
             toolCall.parameters
           );
+          const toolDuration = Date.now() - toolStartTime;
+          console.log(`[AGENT LOOP] Tool ${toolCall.name} completed (${toolDuration}ms)`, {
+            success: toolResult.success,
+            outputLength: toolResult.output?.length || 0,
+          });
 
           // Log tool execution
           const toolExecution = {
@@ -292,13 +377,16 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
         }
 
         // Continue loop to get final response after tool execution
+        console.log(`[AGENT LOOP] Tool executions complete, continuing loop for final response`);
         continueLoop = true;
       } else {
         // No tool calls, we're done
+        console.log(`[AGENT LOOP] No tool calls, agent response complete`);
         continueLoop = false;
       }
 
       // Log turn
+      console.log(`[AGENT LOOP] Logging turn ${turnNumber} to trace...`);
       const turn: Turn = {
         turnNumber,
         userMessage: turnNumber === 1 ? userMessage : '[Tool results]',
@@ -308,13 +396,23 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
         timestamp: new Date(),
       };
       await this.tracePort.appendTurn(runId, turn);
+      console.log(`[AGENT LOOP] Turn ${turnNumber} logged`);
 
       turnNumber++;
     }
 
+    if (turnNumber > maxTurns) {
+      console.warn(`[AGENT LOOP] Max turns (${maxTurns}) reached for runId: ${runId}`);
+    } else {
+      console.log(`[AGENT LOOP] Loop completed normally after ${turnNumber - 1} turns`);
+    }
+
     if (streamSessionId) {
+      console.log(`[AGENT LOOP] Sending stream completion for sessionId: ${streamSessionId}`);
       await this.streamingPort.complete(streamSessionId);
     }
+    
+    console.log(`[AGENT LOOP] Agent loop finished for runId: ${runId}`);
   }
 
   /**
@@ -325,11 +423,17 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     request: GenerateRequest,
     streamSessionId: string
   ) {
+    console.log(`[STREAMING] Starting streaming generation for sessionId: ${streamSessionId}`);
     let fullContent = '';
     const toolCalls: any[] = [];
     let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let chunkCount = 0;
 
     for await (const chunk of model.generateStream(request)) {
+      chunkCount++;
+      if (chunkCount % 10 === 0) {
+        console.log(`[STREAMING] Received ${chunkCount} chunks so far...`);
+      }
       await this.streamingPort.send(streamSessionId, chunk);
 
       if (chunk.type === 'content' && chunk.content) {
@@ -341,6 +445,8 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
         usage = chunk.usage;
       }
     }
+
+    console.log(`[STREAMING] Streaming complete: ${chunkCount} chunks, ${fullContent.length} chars, ${toolCalls.length} tool calls`);
 
     return {
       content: fullContent,

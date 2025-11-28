@@ -171,11 +171,19 @@ export class ExecuteAgentUseCase {
     modelOverride?: string;
     maxTurns?: number;
   }): Promise<string> {
-    // Returns run ID
-    return await this.executionService.execute(request.agentId, request.message, {
+    console.log(`[USE CASE] ExecuteAgentUseCase.execute called`, {
+      agentId: request.agentId,
+      messageLength: request.message.length,
       modelOverride: request.modelOverride,
       maxTurns: request.maxTurns,
     });
+    // Returns run ID
+    const runId = await this.executionService.execute(request.agentId, request.message, {
+      modelOverride: request.modelOverride,
+      maxTurns: request.maxTurns,
+    });
+    console.log(`[USE CASE] ExecuteAgentUseCase.execute completed with runId: ${runId}`);
+    return runId;
   }
 }
 
@@ -192,8 +200,17 @@ export class ExecuteAgentStreamUseCase {
     maxTurns?: number;
     streamSessionId?: string;
   }): Promise<string> {
+    console.log(`[USE CASE] ========== ExecuteAgentStreamUseCase.execute CALLED ==========`);
+    console.log(`[USE CASE] ExecuteAgentStreamUseCase.execute called`, {
+      agentId: request.agentId,
+      messageLength: request.message.length,
+      modelOverride: request.modelOverride,
+      maxTurns: request.maxTurns,
+      streamSessionId: request.streamSessionId,
+    });
     // Returns stream session ID
-    return await this.executionService.executeStream(
+    console.log(`[USE CASE] About to call executionService.executeStream...`);
+    const sessionId = await this.executionService.executeStream(
       request.agentId,
       request.message,
       {
@@ -202,6 +219,8 @@ export class ExecuteAgentStreamUseCase {
         streamSessionId: request.streamSessionId,
       }
     );
+    console.log(`[USE CASE] ExecuteAgentStreamUseCase.execute completed with sessionId: ${sessionId}`);
+    return sessionId;
   }
 }
 

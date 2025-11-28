@@ -744,8 +744,14 @@ export class InMemoryToolRegistry implements ToolPort {
   }
 
   async execute(name: string, parameters: Record<string, unknown>): Promise<ToolResult> {
+    console.log(`[TOOL PORT] Executing tool: ${name}`, {
+      parameters: JSON.stringify(parameters),
+      timestamp: new Date().toISOString(),
+    });
+
     const tool = this.tools.get(name);
     if (!tool) {
+      console.error(`[TOOL PORT] Tool ${name} not found`);
       return {
         success: false,
         output: `Tool ${name} not found`,
@@ -754,13 +760,25 @@ export class InMemoryToolRegistry implements ToolPort {
       };
     }
 
+    console.log(`[TOOL PORT] Validating parameters for tool: ${name}`);
     this.validateParameters(name, parameters);
+    console.log(`[TOOL PORT] Parameters validated, executing tool: ${name}`);
 
     const startTime = Date.now();
-    const result = await tool.execute(parameters);
-    result.executionTimeMs = Date.now() - startTime;
-
-    return result;
+    try {
+      const result = await tool.execute(parameters);
+      result.executionTimeMs = Date.now() - startTime;
+      console.log(`[TOOL PORT] Tool ${name} completed`, {
+        success: result.success,
+        executionTimeMs: result.executionTimeMs,
+        outputLength: result.output?.length || 0,
+      });
+      return result;
+    } catch (error) {
+      const executionTimeMs = Date.now() - startTime;
+      console.error(`[TOOL PORT] Tool ${name} threw error after ${executionTimeMs}ms:`, error);
+      throw error;
+    }
   }
 
   validateParameters(name: string, parameters: Record<string, unknown>): void {
@@ -799,14 +817,20 @@ export class SSEStreamingAdapter implements StreamingPort {
   }
 
   async send(sessionId: string, chunk: StreamChunk): Promise<void> {
+    console.log(`[STREAMING ADAPTER] send() called for sessionId: ${sessionId}`, {
+      chunkType: chunk.type,
+      hasContent: !!(chunk as any).content,
+    });
+    
     const session = this.sessions.get(sessionId);
     if (!session) {
-      // Session might not be registered yet, that's okay
+      console.warn(`[STREAMING ADAPTER] Session ${sessionId} not found! Sessions available:`, Array.from(this.sessions.keys()));
       return;
     }
 
     // Send SSE event
     const data = `data: ${JSON.stringify(chunk)}\n\n`;
+    console.log(`[STREAMING ADAPTER] Writing ${data.length} bytes to session`);
     session.write(data);
   }
 
@@ -860,10 +884,17 @@ export class DefaultModelRegistry implements ModelRegistryPort {
   }
 
   async getModelInfo(modelId: string): Promise<ModelInfo | null> {
+    console.log(`[MODEL REGISTRY] getModelInfo called for: ${modelId}`);
     if (!this.models.has(modelId)) {
+      console.log(`[MODEL REGISTRY] Model ${modelId} not in cache, refreshing registry...`);
       await this.refresh();
+      console.log(`[MODEL REGISTRY] Registry refresh completed`);
+    } else {
+      console.log(`[MODEL REGISTRY] Model ${modelId} found in cache`);
     }
-    return this.models.get(modelId) || null;
+    const result = this.models.get(modelId) || null;
+    console.log(`[MODEL REGISTRY] Returning model info:`, result ? { id: result.id, name: result.name } : 'null');
+    return result;
   }
 
   async refresh(): Promise<void> {
