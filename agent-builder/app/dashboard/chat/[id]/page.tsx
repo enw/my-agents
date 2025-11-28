@@ -47,6 +47,51 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
+  // Load messages from the most recent run when agent loads
+  useEffect(() => {
+    if (agent && messages.length === 0) {
+      loadLatestRunMessages();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent]);
+
+  async function loadLatestRunMessages() {
+    try {
+      const response = await fetch(`/api/runs?agentId=${agentId}&limit=1`);
+      if (response.ok) {
+        const runs = await response.json();
+        if (runs.length > 0) {
+          const latestRun = runs[0];
+          const runResponse = await fetch(`/api/runs/${latestRun.id}`);
+          if (runResponse.ok) {
+            const run = await runResponse.json();
+            setCurrentRun(run);
+            
+            // Build messages from run turns
+            const runMessages: Message[] = [];
+            if (run.turns && run.turns.length > 0) {
+              run.turns.forEach((turn: any) => {
+                runMessages.push({
+                  role: 'user',
+                  content: turn.userMessage,
+                  timestamp: new Date(turn.timestamp),
+                });
+                runMessages.push({
+                  role: 'assistant',
+                  content: turn.assistantMessage || '',
+                  timestamp: new Date(turn.timestamp),
+                });
+              });
+              setMessages(runMessages);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load latest run messages:', err);
+    }
+  }
+
   async function loadPreviousRuns() {
     try {
       const response = await fetch(`/api/runs?agentId=${agentId}&limit=10`);
@@ -228,6 +273,22 @@ export default function ChatPage() {
                     throw new Error(chunk.error);
                   } else if (chunk.type === 'session') {
                     // Session started
+                  } else if (chunk.type === 'run_created') {
+                    // Run created, fetch details
+                    if (chunk.runId) {
+                      setCurrentRun(null); // Clear previous run
+                      fetchRunDetails(chunk.runId);
+                    }
+                  } else if (chunk.type === 'tool_call') {
+                    // Tool call started, refresh run details to show it
+                    if (currentRun?.id) {
+                      fetchRunDetails(currentRun.id);
+                    }
+                  } else if (chunk.type === 'tool_result') {
+                    // Tool result, refresh run details
+                    if (currentRun?.id) {
+                      fetchRunDetails(currentRun.id);
+                    }
                   }
                 } catch (e) {
                   // Ignore JSON parse errors for non-JSON data
@@ -243,30 +304,48 @@ export default function ChatPage() {
         
         // Fetch the run details to get the actual response
         if (data.runId) {
-          const runResponse = await fetch(`/api/runs/${data.runId}`);
-          if (runResponse.ok) {
-            const run = await runResponse.json();
-            setCurrentRun(run);
-            // Get the assistant message from the last turn
-            if (run.turns && run.turns.length > 0) {
-              const lastTurn = run.turns[run.turns.length - 1];
-              const assistantMessage: Message = {
-                role: 'assistant',
-                content: lastTurn.assistantMessage || 'No response generated',
-                timestamp: new Date(),
-              };
-              setMessages((prev) => [...prev, assistantMessage]);
-            } else {
-              // Run created but no turns yet (still processing)
-              const assistantMessage: Message = {
-                role: 'assistant',
-                content: 'Processing... (run may still be executing)',
-                timestamp: new Date(),
-              };
-              setMessages((prev) => [...prev, assistantMessage]);
+          // Poll for completion
+          let attempts = 0;
+          const maxAttempts = 30;
+          while (attempts < maxAttempts) {
+            const runResponse = await fetch(`/api/runs/${data.runId}`);
+            if (runResponse.ok) {
+              const run = await runResponse.json();
+              setCurrentRun(run);
+              
+              // Get the assistant message from the last turn
+              if (run.turns && run.turns.length > 0) {
+                const lastTurn = run.turns[run.turns.length - 1];
+                const assistantMessage: Message = {
+                  role: 'assistant',
+                  content: lastTurn.assistantMessage || 'No response generated',
+                  timestamp: new Date(lastTurn.timestamp),
+                };
+                setMessages((prev) => {
+                  // Remove any placeholder messages
+                  const filtered = prev.filter(m => m.content !== 'Processing... (run may still be executing)');
+                  return [...filtered, assistantMessage];
+                });
+                break;
+              } else if (run.status === 'completed' || run.status === 'error') {
+                // Run finished but no turns - might be an error
+                const assistantMessage: Message = {
+                  role: 'assistant',
+                  content: run.error || 'No response generated',
+                  timestamp: new Date(),
+                };
+                setMessages((prev) => [...prev, assistantMessage]);
+                break;
+              }
             }
-          } else {
-            throw new Error('Failed to fetch run details');
+            
+            // Wait before next attempt
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+          }
+          
+          if (attempts >= maxAttempts) {
+            throw new Error('Run took too long to complete');
           }
         } else {
           throw new Error('No run ID returned');

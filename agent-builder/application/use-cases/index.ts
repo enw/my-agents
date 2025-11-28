@@ -190,6 +190,7 @@ export class ExecuteAgentStreamUseCase {
     message: string;
     modelOverride?: string;
     maxTurns?: number;
+    streamSessionId?: string;
   }): Promise<string> {
     // Returns stream session ID
     return await this.executionService.executeStream(
@@ -198,6 +199,7 @@ export class ExecuteAgentStreamUseCase {
       {
         modelOverride: request.modelOverride,
         maxTurns: request.maxTurns,
+        streamSessionId: request.streamSessionId,
       }
     );
   }

@@ -106,6 +106,14 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       modelUsed: modelId,
     });
 
+    // If streaming, send runId to client
+    if (options.streamSessionId) {
+      await this.streamingPort.send(options.streamSessionId, {
+        type: 'run_created',
+        runId: run.id,
+      });
+    }
+
     // 4. Execute agent loop
     try {
       await this.executeAgentLoop(agent, run.id, userMessage, modelInfo.id, options);

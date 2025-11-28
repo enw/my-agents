@@ -32,18 +32,20 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            // Start execution in background
+            // Start execution with the same session ID (runs in background)
             const useCase = container.useCases.executeAgentStream();
-            const sessionId = await useCase.execute({
+            useCase.execute({
               agentId,
               message,
               modelOverride,
+              streamSessionId, // Pass the session ID so chunks go to the right place
+            }).catch((error) => {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`)
+              );
+              controller.close();
             });
-
-            // Send initial message with session ID
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'session', sessionId })}\n\n`)
-            );
 
             // The execution service will stream chunks via the streaming port
             // We'll complete when the stream is done (handled by adapter)
