@@ -228,7 +228,6 @@ export default function RunsPage() {
             </table>
           </div>
         )}
-      </div>
     </div>
   );
 }
