@@ -1,1 +1,0 @@
-ALTER TABLE `agents` ADD `settings` text DEFAULT '{}' NOT NULL;
