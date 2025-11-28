@@ -66,11 +66,12 @@ export interface GenerateResponse {
 }
 
 export interface StreamChunk {
-  type: 'content' | 'tool_call' | 'done' | 'error';
+  type: 'content' | 'tool_call' | 'done' | 'error' | 'run_created';
   content?: string;
   toolCall?: Partial<ToolCall>;
   usage?: TokenUsage;
   error?: string;
+  runId?: string;
 }
 
 export interface TokenUsage {
@@ -318,6 +319,12 @@ export interface TracePort {
    * Get tool execution statistics for an agent
    */
   getToolStats(agentId: string): Promise<ToolStats[]>;
+
+  /**
+   * Delete a run and all associated data (turns, tool executions)
+   * @throws NotFoundError if run doesn't exist
+   */
+  deleteRun(runId: string): Promise<void>;
 }
 
 export interface Run {

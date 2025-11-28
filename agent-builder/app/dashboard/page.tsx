@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import AnimatedCard from '../components/AnimatedCard';
+import MorphButton from '../components/MorphButton';
+import { motion } from 'framer-motion';
 
 interface Agent {
   id: string;
@@ -60,96 +63,98 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+    <div className="p-8">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="mb-8"
+      >
+        <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
           Agent Dashboard
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <p className="text-gray-600 dark:text-gray-400">
           Manage your AI agents and view execution history
         </p>
-      </div>
+      </motion.div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg">
-            {error}
-          </div>
-        )}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg"
+        >
+          {error}
+        </motion.div>
+      )}
 
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading agents...</p>
-          </div>
-        ) : agents.length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              No agents yet. Create your first agent to get started!
-            </p>
-            <button
-              onClick={() => router.push('/dashboard/new')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Create Your First Agent
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {agent.name}
-                  </h3>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => router.push(`/dashboard/chat/${agent.id}`)}
-                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
-                      title="Chat with agent"
-                    >
-                      💬
-                    </button>
-                    <button
-                      onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
-                      className="text-gray-600 hover:text-gray-700 dark:text-gray-400 text-sm"
-                      title="Edit agent"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleDelete(agent.id)}
-                      className="text-red-600 hover:text-red-700 dark:text-red-400 text-sm"
-                      title="Delete agent"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  {agent.description}
-                </p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {agent.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1">
-                  <div>Model: {agent.defaultModel}</div>
-                  <div>Tools: {agent.allowedTools.length}</div>
+      {loading ? (
+        <div className="text-center py-16">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading agents...</p>
+        </div>
+      ) : agents.length === 0 ? (
+        <AnimatedCard className="text-center py-16">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            No agents yet. Create your first agent to get started!
+          </p>
+          <MorphButton variant="primary" onClick={() => router.push('/dashboard/new')}>
+            Create Your First Agent
+          </MorphButton>
+        </AnimatedCard>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {agents.map((agent, index) => (
+            <AnimatedCard key={agent.id} delay={index * 0.05}>
+              <div className="flex justify-between items-start mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {agent.name}
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => router.push(`/dashboard/chat/${agent.id}`)}
+                    className="text-accent hover:text-accent-hover text-sm transition-colors duration-150"
+                    title="Chat with agent"
+                  >
+                    💬
+                  </button>
+                  <button
+                    onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
+                    className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm transition-colors duration-150"
+                    title="Edit agent"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => handleDelete(agent.id)}
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm transition-colors duration-150"
+                    title="Delete agent"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                {agent.description}
+              </p>
+              <div className="flex flex-wrap gap-2 mb-6">
+                {agent.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-3 py-1 bg-accent-light dark:bg-blue-900/30 text-accent dark:text-blue-300 text-xs rounded-full border border-accent/20 transition-colors duration-150"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div>Model: {agent.defaultModel}</div>
+                <div>Tools: {agent.allowedTools.length}</div>
+              </div>
+            </AnimatedCard>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-

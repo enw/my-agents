@@ -360,6 +360,24 @@ export class GetToolStatsUseCase {
   }
 }
 
+/**
+ * Use Case: Delete a run
+ */
+export class DeleteRunUseCase {
+  constructor(private tracePort: TracePort) {}
+
+  async execute(runId: string): Promise<void> {
+    // Verify run exists
+    const run = await this.tracePort.getRun(runId);
+    if (!run) {
+      throw new ValidationError(`Run ${runId} not found`);
+    }
+
+    // Delete the run (cascades to turns and tool executions)
+    await this.tracePort.deleteRun(runId);
+  }
+}
+
 // ============================================================================
 // USE CASE FACTORY - Dependency Injection Container
 // ============================================================================
@@ -442,6 +460,10 @@ export class UseCaseFactory {
 
   getToolStats() {
     return new GetToolStatsUseCase(this.deps.tracePort);
+  }
+
+  deleteRun() {
+    return new DeleteRunUseCase(this.deps.tracePort);
   }
 }
 

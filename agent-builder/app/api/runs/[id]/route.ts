@@ -21,3 +21,32 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const container = await getContainer();
+    const useCase = container.useCases.deleteRun();
+    await useCase.execute(id);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting run:', error);
+    
+    // Handle NotFoundError
+    if (error instanceof Error && error.message.includes('not found')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to delete run' },
+      { status: 500 }
+    );
+  }
+}
+

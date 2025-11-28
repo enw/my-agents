@@ -77,10 +77,10 @@ export default function EditAgentPage() {
         defaultModel: agent.defaultModel,
         allowedTools: agent.allowedTools,
         tags: agent.tags,
-        settings: agent.settings || {
-          temperature: 0.7,
-          maxTokens: 4096,
-          topP: 1.0,
+        settings: {
+          temperature: agent.settings?.temperature ?? 0.7,
+          maxTokens: agent.settings?.maxTokens ?? 4096,
+          topP: agent.settings?.topP ?? 1.0,
         },
       });
     } catch (err) {

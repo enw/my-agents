@@ -1257,4 +1257,16 @@ export class SqliteTraceRepository implements TracePort {
       avgExecutionTime: stat.avgExecutionTime,
     }));
   }
+
+  async deleteRun(runId: string): Promise<void> {
+    // Verify run exists
+    const run = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
+    if (!run) {
+      throw new NotFoundError('Run', runId);
+    }
+
+    // Delete the run - cascade deletes will handle turns and tool executions
+    // Since the schema has onDelete: 'cascade', we only need to delete the run
+    await this.db.delete(runs).where(eq(runs.id, runId));
+  }
 }

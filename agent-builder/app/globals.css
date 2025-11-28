@@ -5,23 +5,122 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* Design System Tokens */
+  --accent-primary: #2563EB;
+  --accent-primary-hover: #1D4ED8;
+  --accent-primary-light: #DBEAFE;
+  
+  --border-light: #E5E7EB;
+  --border-dark: #374151;
+  
+  --text-muted-light: #6B7280;
+  --text-muted-dark: #9CA3AF;
+  
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-base: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  
+  --transition-fast: 100ms;
+  --transition-base: 150ms;
+  --transition-slow: 180ms;
+  
+  --ease-out-kinetic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-sharp: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-gentle: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --border-light: #374151;
+  --border-dark: #4B5563;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+@layer components {
+  /* Card Component */
+  .card {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg;
+    @apply transition-all duration-150;
+    transition-timing-function: var(--ease-out-kinetic);
+    padding: var(--spacing-lg);
+    animation: glide-fade-in var(--transition-slow) var(--ease-out-gentle);
+  }
+  
+  .card:hover {
+    @apply border-gray-300 dark:border-gray-600;
+    transform: scale(1.01);
+  }
+  
+  /* Button Components */
+  .btn-primary {
+    @apply px-6 py-3 border-2 border-accent text-accent font-medium rounded-lg;
+    @apply transition-all duration-150;
+    transition-timing-function: var(--ease-out-kinetic);
+    @apply hover:bg-accent hover:text-white;
+    @apply active:scale-[0.98];
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg;
+    @apply transition-all duration-150;
+    transition-timing-function: var(--ease-out-kinetic);
+    @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+    @apply active:scale-[0.98];
+  }
+  
+  .btn-danger {
+    @apply px-6 py-3 border-2 border-red-600 text-red-600 font-medium rounded-lg;
+    @apply transition-all duration-150;
+    transition-timing-function: var(--ease-out-kinetic);
+    @apply hover:bg-red-600 hover:text-white;
+    @apply active:scale-[0.98];
+  }
+  
+  /* Input Component */
+  .input {
+    @apply w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg;
+    @apply bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100;
+    @apply transition-all duration-150;
+    transition-timing-function: var(--ease-out-kinetic);
+    @apply focus:outline-none focus:border-accent focus:scale-[1.01];
+  }
+  
+  /* Reduced Motion Support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  .transition-kinetic {
+    transition-timing-function: var(--ease-out-kinetic);
+  }
+  
+  .transition-sharp {
+    transition-timing-function: var(--ease-out-sharp);
+  }
+  
+  .transition-gentle {
+    transition-timing-function: var(--ease-out-gentle);
   }
 }
