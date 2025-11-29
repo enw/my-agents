@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import TraceViewer from '../../../components/TraceViewer';
 import ThemeToggle from '../../../components/ThemeToggle';
 
@@ -41,6 +43,7 @@ export default function ChatPage() {
   const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const assistantMessageIndexRef = useRef<number>(-1);
 
   useEffect(() => {
     loadAgent();
@@ -324,8 +327,12 @@ export default function ChatPage() {
           content: '',
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, assistantMessage]);
-        const messageIndex = messages.length;
+        // Use a ref to track the assistant message index to avoid stale state issues
+        setMessages((prev) => {
+          const updated = [...prev, assistantMessage];
+          assistantMessageIndexRef.current = updated.length - 1;
+          return updated;
+        });
 
         if (reader) {
           while (true) {
@@ -349,10 +356,14 @@ export default function ChatPage() {
                   if (chunk.type === 'content' && chunk.content) {
                     setMessages((prev) => {
                       const updated = [...prev];
-                      updated[messageIndex] = {
-                        ...updated[messageIndex],
-                        content: (updated[messageIndex].content || '') + chunk.content,
-                      };
+                      // Use the ref to get the correct assistant message index
+                      const assistantIndex = assistantMessageIndexRef.current;
+                      if (assistantIndex >= 0 && assistantIndex < updated.length && updated[assistantIndex].role === 'assistant') {
+                        updated[assistantIndex] = {
+                          ...updated[assistantIndex],
+                          content: (updated[assistantIndex].content || '') + chunk.content,
+                        };
+                      }
                       return updated;
                     });
                   } else if (chunk.type === 'error') {
@@ -590,7 +601,179 @@ export default function ChatPage() {
                       : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className={`prose dark:prose-invert max-w-none prose-sm 
+                      prose-headings:mt-0 prose-headings:mb-2 prose-headings:font-semibold
+                      prose-p:my-2 prose-p:leading-relaxed
+                      prose-ul:my-2 prose-ol:my-2 prose-li:my-1
+                      prose-code:text-sm prose-code:font-mono
+                      prose-pre:bg-gray-100 dark:prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-gray-700
+                      prose-pre:text-gray-900 dark:prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:p-4 prose-pre:overflow-x-auto
+                      prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+                      prose-strong:font-semibold prose-strong:text-gray-900 dark:prose-strong:text-gray-100
+                      prose-blockquote:border-l-4 prose-blockquote:border-gray-300 dark:prose-blockquote:border-gray-600 prose-blockquote:pl-4 prose-blockquote:italic
+                      prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-table:shadow-sm
+                      prose-th:border prose-th:border-gray-300 dark:prose-th:border-gray-600 prose-th:bg-gray-50 dark:prose-th:bg-gray-800 prose-th:p-3 prose-th:font-semibold prose-th:text-left prose-th:text-gray-900 dark:prose-th:text-gray-100
+                      prose-td:border prose-td:border-gray-300 dark:prose-td:border-gray-600 prose-td:p-3 prose-td:text-gray-700 dark:prose-td:text-gray-300
+                      prose-tr:hover:bg-gray-50 dark:prose-tr:hover:bg-gray-800/50
+                      ${message.role === 'user' ? 'prose-invert' : ''}`}
+                    components={{
+                      code: ({ node, className, children, ...props }: any) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const isInline = !match;
+                        
+                        if (isInline) {
+                          // Inline code styling
+                          return (
+                            <code 
+                              className={`bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono ${
+                                message.role === 'user' 
+                                  ? 'bg-blue-500/20 text-blue-100' 
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                        
+                        // Code block styling
+                        return (
+                          <code 
+                            className={`block w-full p-0 bg-transparent text-sm font-mono ${
+                              message.role === 'user' 
+                                ? 'text-blue-50' 
+                                : 'text-gray-900 dark:text-gray-100'
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ children, ...props }: any) => {
+                        return (
+                          <pre 
+                            className={`my-4 rounded-lg p-4 overflow-x-auto ${
+                              message.role === 'user'
+                                ? 'bg-blue-500/20 border border-blue-400/30'
+                                : 'bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700'
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </pre>
+                        );
+                      },
+                      a: ({ node, href, children, ...props }: any) => {
+                        return (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`${
+                              message.role === 'user'
+                                ? 'text-blue-200 hover:text-blue-100'
+                                : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                            } underline transition-colors`}
+                            {...props}
+                          >
+                            {children}
+                          </a>
+                        );
+                      },
+                      table: ({ children, ...props }: any) => {
+                        return (
+                          <div className="overflow-x-auto my-2">
+                            <table
+                              className={`w-full border-collapse border border-gray-300 dark:border-gray-600 rounded overflow-hidden shadow-sm text-xs ${
+                                message.role === 'user'
+                                  ? 'border-blue-400/30'
+                                  : ''
+                              }`}
+                              {...props}
+                            >
+                              {children}
+                            </table>
+                          </div>
+                        );
+                      },
+                      thead: ({ children, ...props }: any) => {
+                        return (
+                          <thead
+                            className={`${
+                              message.role === 'user'
+                                ? 'bg-blue-500/20'
+                                : 'bg-gray-50 dark:bg-gray-800'
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </thead>
+                        );
+                      },
+                      tbody: ({ children, ...props }: any) => {
+                        return (
+                          <tbody
+                            className={`divide-y divide-gray-200 dark:divide-gray-700 ${
+                              message.role === 'user'
+                                ? 'divide-blue-400/20'
+                                : ''
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </tbody>
+                        );
+                      },
+                      tr: ({ children, ...props }: any) => {
+                        return (
+                          <tr
+                            className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                              message.role === 'user'
+                                ? 'hover:bg-blue-500/10'
+                                : ''
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </tr>
+                        );
+                      },
+                      th: ({ children, ...props }: any) => {
+                        return (
+                          <th
+                            className={`px-2 py-1 text-xs text-left font-semibold border-b border-gray-300 dark:border-gray-600 whitespace-nowrap ${
+                              message.role === 'user'
+                                ? 'text-blue-100 border-blue-400/30'
+                                : 'text-gray-900 dark:text-gray-100'
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </th>
+                        );
+                      },
+                      td: ({ children, ...props }: any) => {
+                        return (
+                          <td
+                            className={`px-2 py-1 text-xs border-b border-gray-200 dark:border-gray-700 ${
+                              message.role === 'user'
+                                ? 'text-blue-50 border-blue-400/20'
+                                : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </td>
+                        );
+                      },
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                   <p
                     className={`text-xs mt-1 ${
                       message.role === 'user'
