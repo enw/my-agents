@@ -49,6 +49,8 @@ export default function ChatPage() {
     loadAgent();
     loadModels();
     loadPreviousRuns();
+    // Focus input when page loads
+    setTimeout(() => inputRef.current?.focus(), 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
@@ -259,6 +261,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
+    // Keep focus on input after messages update
+    inputRef.current?.focus();
   }, [messages]);
 
   async function loadAgent() {
@@ -292,6 +296,9 @@ export default function ChatPage() {
     setInput('');
     setLoading(true);
     setError(null);
+    
+    // Keep focus on input after clearing
+    setTimeout(() => inputRef.current?.focus(), 50);
     
     // Reset to latest conversation when sending new message
     setCurrentRunIndex(-1);
@@ -395,6 +402,8 @@ export default function ChatPage() {
           }
         }
         setLoading(false);
+        // Refocus input after streaming completes
+        setTimeout(() => inputRef.current?.focus(), 100);
       } else {
         // Fallback to non-streaming
         const data = await response.json();
@@ -448,10 +457,14 @@ export default function ChatPage() {
           throw new Error('No run ID returned');
         }
         setLoading(false);
+        // Refocus input after non-streaming response
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
       setLoading(false);
+      // Refocus input even on error
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }
 
@@ -571,7 +584,13 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6">
+        <div 
+          className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6"
+          onClick={() => {
+            // Refocus input when clicking in message area
+            setTimeout(() => inputRef.current?.focus(), 100);
+          }}
+        >
           {messages.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-600 dark:text-gray-400 mb-4">
@@ -804,9 +823,21 @@ export default function ChatPage() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                onKeyPress={(e) => {
+                  // Prevent default Enter behavior to keep focus
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Type your message..."
                 disabled={loading}
+                autoFocus
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
               <button
