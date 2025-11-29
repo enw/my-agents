@@ -396,6 +396,11 @@ export interface ModelRegistryPort {
   listByProvider(provider: ModelProvider): Promise<ModelInfo[]>;
 
   /**
+   * List only models that support tool calling
+   */
+  listModelsWithTools(): Promise<ModelInfo[]>;
+
+  /**
    * Get detailed model information
    */
   getModelInfo(modelId: string): Promise<ModelInfo | null>;

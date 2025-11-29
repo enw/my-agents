@@ -11,4 +11,5 @@ export interface ModelInfo {
   speed?: number; // Tokens/sec (measured)
   strengths?: string[];
   lastUsed?: Date;
+  supportsTools?: boolean; // Whether the model supports function calling/tools
 }

@@ -116,7 +116,7 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       console.error(`[AGENT EXECUTION] Model ${modelId} not found`);
       throw new ValidationError(`Model ${modelId} not found`);
     }
-    console.log(`[AGENT EXECUTION] Model info loaded: ${modelInfo.name}`);
+    console.log(`[AGENT EXECUTION] Model info loaded: ${modelInfo.displayName || modelInfo.id}`);
 
     // 3. Create run trace
     console.log(`[AGENT EXECUTION] Creating run trace...`);

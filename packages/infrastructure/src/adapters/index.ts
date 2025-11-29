@@ -62,21 +62,43 @@ export class OllamaModelAdapter implements ModelPort {
       // Convert to Ollama format
       const ollamaRequest = this.convertToOllamaFormat(request);
 
+      // Build request body conditionally
+      const requestBody: any = {
+        model: this.modelName,
+        messages: ollamaRequest.messages,
+        stream: false,
+      };
+
+      // Only include tools if they exist
+      if (ollamaRequest.tools && ollamaRequest.tools.length > 0) {
+        requestBody.tools = ollamaRequest.tools;
+      }
+
+      // Build options object only if we have settings
+      const options: any = {};
+      if (request.settings?.temperature !== undefined) {
+        options.temperature = request.settings.temperature;
+      }
+      if (request.settings?.maxTokens !== undefined) {
+        options.num_predict = request.settings.maxTokens;
+      }
+      if (request.settings?.topP !== undefined) {
+        options.top_p = request.settings.topP;
+      }
+      // Only include stop if it's an array (Ollama requires array type)
+      if (request.settings?.stopSequences && Array.isArray(request.settings.stopSequences)) {
+        options.stop = request.settings.stopSequences;
+      }
+
+      // Only include options if it has at least one property
+      if (Object.keys(options).length > 0) {
+        requestBody.options = options;
+      }
+
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.modelName,
-          messages: ollamaRequest.messages,
-          tools: ollamaRequest.tools,
-          stream: false,
-          options: {
-            temperature: request.settings?.temperature,
-            num_predict: request.settings?.maxTokens,
-            top_p: request.settings?.topP,
-            stop: request.settings?.stopSequences,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -124,15 +146,43 @@ export class OllamaModelAdapter implements ModelPort {
       const ollamaRequest = this.convertToOllamaFormat(request);
       console.log(`[OLLAMA ADAPTER] Converted request, making fetch call...`);
 
+      // Build request body conditionally
+      const requestBody: any = {
+        model: this.modelName,
+        messages: ollamaRequest.messages,
+        stream: true,
+      };
+
+      // Only include tools if they exist
+      if (ollamaRequest.tools && ollamaRequest.tools.length > 0) {
+        requestBody.tools = ollamaRequest.tools;
+      }
+
+      // Build options object only if we have settings
+      const options: any = {};
+      if (request.settings?.temperature !== undefined) {
+        options.temperature = request.settings.temperature;
+      }
+      if (request.settings?.maxTokens !== undefined) {
+        options.num_predict = request.settings.maxTokens;
+      }
+      if (request.settings?.topP !== undefined) {
+        options.top_p = request.settings.topP;
+      }
+      // Only include stop if it's an array (Ollama requires array type)
+      if (request.settings?.stopSequences && Array.isArray(request.settings.stopSequences)) {
+        options.stop = request.settings.stopSequences;
+      }
+
+      // Only include options if it has at least one property
+      if (Object.keys(options).length > 0) {
+        requestBody.options = options;
+      }
+
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.modelName,
-          messages: ollamaRequest.messages,
-          tools: ollamaRequest.tools,
-          stream: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log(`[OLLAMA ADAPTER] Fetch response status: ${response.status} ${response.statusText}`);
@@ -921,6 +971,11 @@ export class DefaultModelRegistry implements ModelRegistryPort {
     return Array.from(this.models.values());
   }
 
+  async listModelsWithTools(): Promise<ModelInfo[]> {
+    await this.refresh();
+    return Array.from(this.models.values()).filter((m) => m.supportsTools === true);
+  }
+
   async listByProvider(provider: ModelProvider): Promise<ModelInfo[]> {
     await this.refresh();
     return Array.from(this.models.values()).filter((m) => m.provider === provider);
@@ -969,15 +1024,19 @@ export class DefaultModelRegistry implements ModelRegistryPort {
 
       for (const model of data.models || []) {
         const modelId = `ollama:${model.name}`;
+        const modelName = model.name.toLowerCase();
+        
+        // Determine if model supports tools based on known patterns
+        const supportsTools = this.modelSupportsTools(modelName);
+        
         this.models.set(modelId, {
           id: modelId,
           provider: 'ollama',
           displayName: model.name,
-          size: model.size,
           contextWindow: 8192, // Default, would parse from model details
-          supportsTools: true,
+          supportsTools,
           supportsStreaming: true,
-          metadata: model,
+          metadata: { size: model.size, name: model.name },
         });
       }
     } catch (error) {
@@ -988,6 +1047,59 @@ export class DefaultModelRegistry implements ModelRegistryPort {
   private async refreshOpenRouterModels(): Promise<void> {
     // Would fetch from OpenRouter API
     // Similar implementation to Ollama
+  }
+
+  /**
+   * Check if an Ollama model supports tools based on model name patterns
+   */
+  private modelSupportsTools(modelName: string): boolean {
+    // Models that support tools
+    const toolSupportingPatterns = [
+      'llama3.2',
+      'llama3.1',
+      'qwen',
+      'qwen2',
+      'qwen2.5',
+      'deepseek',
+      'deepseek-r1',
+      'gemma2',
+      'gemma3',
+      'phi-3.5',
+      'mistral',
+      'mixtral',
+      'codellama',
+      'llama3.3',
+    ];
+
+    // Models that definitely don't support tools
+    const noToolPatterns = [
+      'llama3:8b', // Old llama3 models don't support tools
+      'llama3:13b',
+      'llava', // Vision models
+      'embed', // Embedding models
+      'nomic-embed',
+      'all-minilm',
+      'phi3', // Old phi3
+      'phi-3-mini',
+    ];
+
+    // Check no-tool patterns first
+    for (const pattern of noToolPatterns) {
+      if (modelName.includes(pattern.toLowerCase())) {
+        return false;
+      }
+    }
+
+    // Check tool-supporting patterns
+    for (const pattern of toolSupportingPatterns) {
+      if (modelName.includes(pattern.toLowerCase())) {
+        return true;
+      }
+    }
+
+    // Default: assume older models don't support tools
+    // But allow newer patterns like llama3.2
+    return modelName.includes('llama3.2') || modelName.includes('llama3.1');
   }
 }
 

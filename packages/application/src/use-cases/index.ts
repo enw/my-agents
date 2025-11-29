@@ -251,13 +251,23 @@ export class ListModelsUseCase {
   async execute(options?: {
     provider?: string;
     refresh?: boolean;
+    toolsOnly?: boolean; // Filter to only models that support tools
   }) {
     if (options?.refresh) {
       await this.modelRegistry.refresh();
     }
 
+    if (options?.toolsOnly) {
+      return await this.modelRegistry.listModelsWithTools();
+    }
+
     if (options?.provider) {
-      return await this.modelRegistry.listByProvider(options.provider as any);
+      const models = await this.modelRegistry.listByProvider(options.provider as any);
+      // If toolsOnly is true, also filter by tools support
+      if (options.toolsOnly) {
+        return models.filter((m) => m.supportsTools === true);
+      }
+      return models;
     }
 
     return await this.modelRegistry.listAllModels();
