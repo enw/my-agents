@@ -210,6 +210,8 @@ export class OllamaModelAdapter implements ModelPort {
       const decoder = new TextDecoder();
       let buffer = '';
       let chunkCount = 0;
+      let accumulatedToolCalls = new Map<string, any>(); // Track tool calls by ID
+      let fullContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -232,26 +234,149 @@ export class OllamaModelAdapter implements ModelPort {
                 console.log(`[OLLAMA ADAPTER] Processed ${chunkCount} chunks...`);
               }
 
+              // Accumulate content
               if (chunk.message?.content) {
+                fullContent += chunk.message.content;
                 console.log(`[OLLAMA ADAPTER] Yielding content chunk: ${chunk.message.content.substring(0, 50)}...`);
                 yield { type: 'content', content: chunk.message.content };
               }
 
+              // Handle tool calls - Ollama streams them incrementally or sends complete ones
               if (chunk.message?.tool_calls) {
-                console.log(`[OLLAMA ADAPTER] Yielding tool_calls: ${chunk.message.tool_calls.length} calls`);
+                console.log(`[OLLAMA ADAPTER] Processing tool_calls: ${chunk.message.tool_calls.length} calls`);
                 for (const toolCall of chunk.message.tool_calls) {
-                  yield {
-                    type: 'tool_call',
-                    toolCall: {
-                      id: toolCall.id || crypto.randomUUID(),
-                      name: toolCall.function.name,
-                      parameters: JSON.parse(toolCall.function.arguments),
-                    },
-                  };
+                  const toolCallId = toolCall.id || crypto.randomUUID();
+                  const functionData = toolCall.function || {};
+                  
+                  // Check if this is a complete tool call (has name and valid arguments)
+                  const hasCompleteData = functionData.name && 
+                    (functionData.arguments !== undefined && functionData.arguments !== null);
+                  
+                  // Parse arguments safely
+                  let parsedArgs: any = null;
+                  if (functionData.arguments !== undefined && functionData.arguments !== null) {
+                    if (typeof functionData.arguments === 'string') {
+                      try {
+                        parsedArgs = JSON.parse(functionData.arguments);
+                      } catch {
+                        // Arguments might be incomplete JSON string, keep as string for now
+                        parsedArgs = null;
+                      }
+                    } else if (typeof functionData.arguments === 'object') {
+                      // Already an object, use directly
+                      parsedArgs = functionData.arguments;
+                    }
+                  }
+                  
+                  // If we have complete data with parsed arguments, yield immediately (for models like qwen3)
+                  // Otherwise accumulate for later (for models that stream incrementally)
+                  if (hasCompleteData && parsedArgs !== null) {
+                    try {
+                      console.log(`[OLLAMA ADAPTER] Yielding complete tool_call: ${functionData.name}`);
+                      yield {
+                        type: 'tool_call',
+                        toolCall: {
+                          id: toolCallId,
+                          name: functionData.name,
+                          parameters: parsedArgs,
+                        },
+                      };
+                      // Mark as yielded so we don't yield again when done
+                      accumulatedToolCalls.set(toolCallId, { yielded: true });
+                    } catch (yieldError) {
+                      console.error(`[OLLAMA ADAPTER] Failed to yield tool call ${toolCallId}:`, yieldError);
+                    }
+                  } else {
+                    // Accumulate for streaming or incomplete tool calls
+                    if (!accumulatedToolCalls.has(toolCallId)) {
+                      accumulatedToolCalls.set(toolCallId, {
+                        id: toolCallId,
+                        name: functionData.name || '',
+                        arguments: functionData.arguments || '',
+                        yielded: false,
+                      });
+                    } else {
+                      // Update existing tool call (for streaming arguments)
+                      const existing = accumulatedToolCalls.get(toolCallId);
+                      if (!existing.yielded) {
+                        if (functionData.arguments !== undefined) {
+                          // Handle both string (streaming) and object (complete) cases
+                          if (typeof existing.arguments === 'string' && typeof functionData.arguments === 'string') {
+                            // Both are strings, concatenate (for streaming)
+                            existing.arguments += functionData.arguments;
+                          } else if (typeof functionData.arguments === 'object' && functionData.arguments !== null) {
+                            // New arguments is an object (complete), use it directly
+                            existing.arguments = functionData.arguments;
+                          } else if (typeof functionData.arguments === 'string') {
+                            // New is string, existing might be object - replace with string
+                            existing.arguments = functionData.arguments;
+                          }
+                        }
+                        // Update name if provided
+                        if (functionData.name) {
+                          existing.name = functionData.name;
+                        }
+                      }
+                    }
+                  }
                 }
               }
 
+              // When chunk is done, yield all accumulated tool calls
               if (chunk.done) {
+                console.log(`[OLLAMA ADAPTER] Stream done, processing ${accumulatedToolCalls.size} accumulated tool calls`);
+                
+                // Yield all accumulated tool calls that haven't been yielded yet
+                for (const [toolCallId, toolCall] of accumulatedToolCalls.entries()) {
+                  // Skip if already yielded
+                  if (toolCall.yielded) {
+                    continue;
+                  }
+                  
+                  try {
+                    // Parse arguments - handle both string and object cases
+                    let parameters: any = {};
+                    
+                    if (toolCall.arguments) {
+                      if (typeof toolCall.arguments === 'string') {
+                        try {
+                          // Try parsing as JSON string
+                          const trimmed = toolCall.arguments.trim();
+                          if (trimmed) {
+                            parameters = JSON.parse(trimmed);
+                          }
+                        } catch (parseError) {
+                          console.warn(`[OLLAMA ADAPTER] Failed to parse tool call arguments as JSON string for ${toolCall.name}:`, parseError);
+                          // If parsing fails, use empty object
+                          parameters = {};
+                        }
+                      } else if (typeof toolCall.arguments === 'object' && toolCall.arguments !== null) {
+                        // Already an object, use it directly
+                        parameters = toolCall.arguments;
+                      }
+                    }
+
+                    if (toolCall.name) {
+                      console.log(`[OLLAMA ADAPTER] Yielding accumulated tool_call: ${toolCall.name}`, {
+                        parametersKeys: Object.keys(parameters),
+                      });
+                      yield {
+                        type: 'tool_call',
+                        toolCall: {
+                          id: toolCallId,
+                          name: toolCall.name,
+                          parameters,
+                        },
+                      };
+                    }
+                  } catch (toolCallError) {
+                    console.error(`[OLLAMA ADAPTER] Failed to yield tool call ${toolCallId}:`, toolCallError);
+                  }
+                }
+                
+                // Clear accumulated tool calls after yielding
+                accumulatedToolCalls.clear();
+
                 console.log(`[OLLAMA ADAPTER] Stream done, usage:`, {
                   inputTokens: chunk.prompt_eval_count || 0,
                   outputTokens: chunk.eval_count || 0,
