@@ -10,6 +10,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:migrate": "node scripts/migrate.js",
     "clean": "rm -rf .next",
     "postinstall": "node scripts/fix-better-sqlite3.js"
   },

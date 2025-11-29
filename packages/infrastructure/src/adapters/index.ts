@@ -20,6 +20,7 @@ import {
   ModelProvider,
   ModelRegistryPort,
   NotFoundError,
+  PromptVersion,
   Run,
   RunQueryCriteria,
   RunStatus,
@@ -36,7 +37,7 @@ import {
   ValidationError,
 } from '@my-agents/domain';
 
-import { agents, runs, turns, toolExecutions } from '../persistence/schema';
+import { agents, runs, turns, toolExecutions, promptVersions } from '../persistence/schema';
 import { eq, and, desc, asc, like, or, sql, gte, lte } from 'drizzle-orm';
 
 // ============================================================================
@@ -895,6 +896,28 @@ export class SqliteAgentRepository implements AgentPort {
       updatedAt: new Date(),
     };
 
+    // If systemPrompt is being updated, save the old prompt as a version first
+    if (data.systemPrompt !== undefined && data.systemPrompt !== existing.systemPrompt) {
+      // Get the current max version for this agent
+      const maxVersionResult = await this.db
+        .select({ max: sql<number>`COALESCE(MAX(${promptVersions.version}), 0)` })
+        .from(promptVersions)
+        .where(eq(promptVersions.agentId, id))
+        .get();
+
+      const nextVersion = (maxVersionResult?.max || 0) + 1;
+
+      // Save the old prompt as a version
+      await this.db.insert(promptVersions).values({
+        id: crypto.randomUUID(),
+        agentId: id,
+        version: nextVersion,
+        systemPrompt: existing.systemPrompt, // Save the old prompt
+        commitMessage: data.commitMessage || null,
+        createdAt: new Date(),
+      });
+    }
+
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.systemPrompt !== undefined) updateData.systemPrompt = data.systemPrompt;
@@ -923,6 +946,61 @@ export class SqliteAgentRepository implements AgentPort {
   async exists(id: string): Promise<boolean> {
     const agent = await this.findById(id);
     return agent !== null;
+  }
+
+  async getPromptVersions(agentId: string): Promise<PromptVersion[]> {
+    const versions = await this.db
+      .select()
+      .from(promptVersions)
+      .where(eq(promptVersions.agentId, agentId))
+      .orderBy(desc(promptVersions.version))
+      .all();
+
+    return versions.map((v: any) => ({
+      id: v.id,
+      agentId: v.agentId,
+      version: v.version,
+      systemPrompt: v.systemPrompt,
+      commitMessage: v.commitMessage,
+      createdAt: v.createdAt,
+    }));
+  }
+
+  async getPromptVersion(agentId: string, version: number): Promise<PromptVersion | null> {
+    const result = await this.db
+      .select()
+      .from(promptVersions)
+      .where(
+        and(
+          eq(promptVersions.agentId, agentId),
+          eq(promptVersions.version, version)
+        )
+      )
+      .get();
+
+    if (!result) return null;
+
+    return {
+      id: result.id,
+      agentId: result.agentId,
+      version: result.version,
+      systemPrompt: result.systemPrompt,
+      commitMessage: result.commitMessage,
+      createdAt: result.createdAt,
+    };
+  }
+
+  async revertToPromptVersion(agentId: string, version: number): Promise<Agent> {
+    const promptVersion = await this.getPromptVersion(agentId, version);
+    if (!promptVersion) {
+      throw new NotFoundError('PromptVersion', `${agentId}:v${version}`);
+    }
+
+    // Update agent with the reverted prompt
+    return await this.update(agentId, {
+      systemPrompt: promptVersion.systemPrompt,
+      commitMessage: `Reverted to version ${version}`,
+    });
   }
 }
 

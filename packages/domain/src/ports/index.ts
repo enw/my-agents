@@ -139,6 +139,21 @@ export interface AgentPort {
    * Check if agent exists
    */
   exists(id: string): Promise<boolean>;
+
+  /**
+   * Get all prompt versions for an agent
+   */
+  getPromptVersions(agentId: string): Promise<PromptVersion[]>;
+
+  /**
+   * Get a specific prompt version
+   */
+  getPromptVersion(agentId: string, version: number): Promise<PromptVersion | null>;
+
+  /**
+   * Revert agent's prompt to a specific version
+   */
+  revertToPromptVersion(agentId: string, version: number): Promise<Agent>;
 }
 
 export interface Agent {
@@ -176,6 +191,7 @@ export interface UpdateAgentData {
   name?: string;
   description?: string;
   systemPrompt?: string;
+  commitMessage?: string; // Optional commit message for prompt versioning
   defaultModel?: string;
   allowedTools?: string[];
   tags?: string[];
@@ -193,6 +209,15 @@ export interface AgentQueryCriteria {
   offset?: number;
   orderBy?: 'createdAt' | 'updatedAt' | 'name';
   orderDir?: 'asc' | 'desc';
+}
+
+export interface PromptVersion {
+  id: string;
+  agentId: string;
+  version: number;
+  systemPrompt: string;
+  commitMessage: string | null;
+  createdAt: Date;
 }
 
 // ============================================================================

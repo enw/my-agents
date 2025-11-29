@@ -30,6 +30,15 @@ interface Tool {
   description: string;
 }
 
+interface PromptVersion {
+  id: string;
+  agentId: string;
+  version: number;
+  systemPrompt: string;
+  commitMessage: string | null;
+  createdAt: Date;
+}
+
 export default function EditAgentPage() {
   const router = useRouter();
   const params = useParams();
@@ -56,11 +65,16 @@ export default function EditAgentPage() {
   });
 
   const [tagInput, setTagInput] = useState('');
+  const [commitMessage, setCommitMessage] = useState('');
+  const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   useEffect(() => {
     loadAgent();
     loadModels();
     loadTools();
+    loadPromptVersions();
   }, [agentId]);
 
   async function loadAgent() {
@@ -114,6 +128,63 @@ export default function EditAgentPage() {
     }
   }
 
+  async function loadPromptVersions() {
+    try {
+      const response = await fetch(`/api/agents/${agentId}/versions`);
+      if (response.ok) {
+        const data = await response.json();
+        setPromptVersions(data);
+      }
+    } catch (err) {
+      console.error('Failed to load prompt versions:', err);
+    }
+  }
+
+  async function loadPromptVersion(version: number) {
+    try {
+      const response = await fetch(`/api/agents/${agentId}/versions/${version}`);
+      if (response.ok) {
+        const versionData: PromptVersion = await response.json();
+        setFormData(prev => ({
+          ...prev,
+          systemPrompt: versionData.systemPrompt,
+        }));
+        setSelectedVersion(version);
+      }
+    } catch (err) {
+      console.error('Failed to load prompt version:', err);
+    }
+  }
+
+  async function revertToVersion(version: number) {
+    if (!confirm(`Revert to version ${version}? This will update the current prompt.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/agents/${agentId}/revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to revert version');
+      }
+
+      const agent = await response.json();
+      setFormData(prev => ({
+        ...prev,
+        systemPrompt: agent.systemPrompt,
+      }));
+      setSelectedVersion(null);
+      await loadPromptVersions();
+      alert(`Reverted to version ${version}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revert version');
+    }
+  }
+
   function handleToolToggle(toolName: string) {
     setFormData(prev => ({
       ...prev,
@@ -149,13 +220,21 @@ export default function EditAgentPage() {
       const response = await fetch(`/api/agents/${agentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          commitMessage: commitMessage.trim() || undefined,
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update agent');
       }
+
+      // Refresh versions and clear commit message
+      setCommitMessage('');
+      setSelectedVersion(null);
+      await loadPromptVersions();
 
       router.push('/dashboard');
     } catch (err) {
@@ -231,9 +310,89 @@ export default function EditAgentPage() {
 
           {/* System Prompt */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              System Prompt *
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                System Prompt *
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowVersionHistory(!showVersionHistory)}
+                  className="text-xs px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                >
+                  {showVersionHistory ? 'Hide' : 'Show'} History ({promptVersions.length})
+                </button>
+                {selectedVersion !== null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedVersion(null);
+                      loadAgent();
+                    }}
+                    className="text-xs px-3 py-1 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-300 dark:hover:bg-blue-700 transition"
+                  >
+                    Viewing v{selectedVersion} - Click to return to current
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {showVersionHistory && promptVersions.length > 0 && (
+              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Version History</h4>
+                <div className="space-y-2">
+                  {promptVersions.map((version) => (
+                    <div
+                      key={version.id}
+                      className={`p-3 rounded border ${
+                        selectedVersion === version.version
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                              Version {version.version}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(version.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          {version.commitMessage && (
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 italic">
+                              "{version.commitMessage}"
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-600 dark:text-gray-400 font-mono line-clamp-2">
+                            {version.systemPrompt.substring(0, 100)}
+                            {version.systemPrompt.length > 100 ? '...' : ''}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => loadPromptVersion(version.version)}
+                            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => revertToVersion(version.version)}
+                            className="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition"
+                          >
+                            Revert
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <textarea
               required
               rows={6}
@@ -241,6 +400,20 @@ export default function EditAgentPage() {
               onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
             />
+            
+            {/* Commit Message */}
+            <div className="mt-2">
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                Commit Message (optional) - Describe what changed in this prompt
+              </label>
+              <input
+                type="text"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                placeholder="e.g., Added more specific instructions for tool usage"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+              />
+            </div>
           </div>
 
           {/* Default Model */}

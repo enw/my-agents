@@ -27,6 +27,7 @@ export const agents = sqliteTable('agents', {
 
 export const agentsRelations = relations(agents, ({ many }) => ({
   runs: many(runs),
+  promptVersions: many(promptVersions),
 }));
 
 // ============================================================================
@@ -118,6 +119,28 @@ export const toolExecutionsRelations = relations(toolExecutions, ({ one }) => ({
 }));
 
 // ============================================================================
+// PROMPT VERSIONS TABLE - Version History for System Prompts
+// ============================================================================
+
+export const promptVersions = sqliteTable('prompt_versions', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(), // Auto-incrementing version number per agent
+  systemPrompt: text('system_prompt').notNull(),
+  commitMessage: text('commit_message'), // Optional commit message
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+export const promptVersionsRelations = relations(promptVersions, ({ one }) => ({
+  agent: one(agents, {
+    fields: [promptVersions.agentId],
+    references: [agents.id],
+  }),
+}));
+
+// ============================================================================
 // MODEL USAGE TABLE - Track Model Performance
 // ============================================================================
 
@@ -149,6 +172,9 @@ export type NewToolExecution = typeof toolExecutions.$inferInsert;
 
 export type ModelUsage = typeof modelUsage.$inferSelect;
 export type NewModelUsage = typeof modelUsage.$inferInsert;
+
+export type PromptVersion = typeof promptVersions.$inferSelect;
+export type NewPromptVersion = typeof promptVersions.$inferInsert;
 
 // ============================================================================
 // MIGRATION HELPERS

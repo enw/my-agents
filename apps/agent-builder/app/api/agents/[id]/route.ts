@@ -35,6 +35,7 @@ export async function PUT(
       name: body.name,
       description: body.description,
       systemPrompt: body.systemPrompt,
+      commitMessage: body.commitMessage,
       defaultModel: body.defaultModel,
       allowedTools: body.allowedTools,
       tags: body.tags,
