@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getContainer } from '../../../infrastructure/config/bootstrap';
+import { getContainer } from '@/lib/bootstrap';
 
 export async function POST(request: NextRequest) {
   try {

@@ -35,10 +35,10 @@ export async function getContainer(): Promise<AppContainer> {
       validationService: infraContainer.validationService,
     });
 
-    globalContainer = {
-      ...infraContainer,
-      useCases: useCaseFactory,
-    };
+    // Instead of spreading, add useCases directly to preserve getters
+    // Cast to AppContainer to add the useCases property
+    (infraContainer as any).useCases = useCaseFactory;
+    globalContainer = infraContainer as AppContainer;
   }
   return globalContainer;
 }

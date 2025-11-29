@@ -114,7 +114,15 @@ export class OllamaModelAdapter implements ModelPort {
 
   async *generateStream(request: GenerateRequest): AsyncGenerator<StreamChunk> {
     try {
+      console.log(`[OLLAMA ADAPTER] Starting stream generation`, {
+        model: this.modelName,
+        baseUrl: this.baseUrl,
+        messageCount: request.messages.length,
+        hasTools: !!request.tools && request.tools.length > 0,
+      });
+      
       const ollamaRequest = this.convertToOllamaFormat(request);
+      console.log(`[OLLAMA ADAPTER] Converted request, making fetch call...`);
 
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
@@ -127,26 +135,38 @@ export class OllamaModelAdapter implements ModelPort {
         }),
       });
 
+      console.log(`[OLLAMA ADAPTER] Fetch response status: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Could not read error');
+        console.error(`[OLLAMA ADAPTER] Request failed: ${response.status} ${response.statusText}`, {
+          errorBody: errorText.substring(0, 500),
+        });
         yield {
           type: 'error',
-          error: `Ollama request failed: ${response.statusText}`,
+          error: `Ollama request failed: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`,
         };
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
+        console.error(`[OLLAMA ADAPTER] No response body reader available`);
         yield { type: 'error', error: 'No response body' };
         return;
       }
 
+      console.log(`[OLLAMA ADAPTER] Reading stream...`);
       const decoder = new TextDecoder();
       let buffer = '';
+      let chunkCount = 0;
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log(`[OLLAMA ADAPTER] Stream reader done, processed ${chunkCount} chunks`);
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -154,40 +174,59 @@ export class OllamaModelAdapter implements ModelPort {
 
         for (const line of lines) {
           if (line.trim()) {
-            const chunk = JSON.parse(line);
+            try {
+              const chunk = JSON.parse(line);
+              chunkCount++;
 
-            if (chunk.message?.content) {
-              yield { type: 'content', content: chunk.message.content };
-            }
+              if (chunkCount % 10 === 0) {
+                console.log(`[OLLAMA ADAPTER] Processed ${chunkCount} chunks...`);
+              }
 
-            if (chunk.message?.tool_calls) {
-              for (const toolCall of chunk.message.tool_calls) {
+              if (chunk.message?.content) {
+                console.log(`[OLLAMA ADAPTER] Yielding content chunk: ${chunk.message.content.substring(0, 50)}...`);
+                yield { type: 'content', content: chunk.message.content };
+              }
+
+              if (chunk.message?.tool_calls) {
+                console.log(`[OLLAMA ADAPTER] Yielding tool_calls: ${chunk.message.tool_calls.length} calls`);
+                for (const toolCall of chunk.message.tool_calls) {
+                  yield {
+                    type: 'tool_call',
+                    toolCall: {
+                      id: toolCall.id || crypto.randomUUID(),
+                      name: toolCall.function.name,
+                      parameters: JSON.parse(toolCall.function.arguments),
+                    },
+                  };
+                }
+              }
+
+              if (chunk.done) {
+                console.log(`[OLLAMA ADAPTER] Stream done, usage:`, {
+                  inputTokens: chunk.prompt_eval_count || 0,
+                  outputTokens: chunk.eval_count || 0,
+                });
                 yield {
-                  type: 'tool_call',
-                  toolCall: {
-                    id: toolCall.id || crypto.randomUUID(),
-                    name: toolCall.function.name,
-                    parameters: JSON.parse(toolCall.function.arguments),
+                  type: 'done',
+                  usage: {
+                    inputTokens: chunk.prompt_eval_count || 0,
+                    outputTokens: chunk.eval_count || 0,
+                    totalTokens:
+                      (chunk.prompt_eval_count || 0) + (chunk.eval_count || 0),
                   },
                 };
               }
-            }
-
-            if (chunk.done) {
-              yield {
-                type: 'done',
-                usage: {
-                  inputTokens: chunk.prompt_eval_count || 0,
-                  outputTokens: chunk.eval_count || 0,
-                  totalTokens:
-                    (chunk.prompt_eval_count || 0) + (chunk.eval_count || 0),
-                },
-              };
+            } catch (parseError) {
+              console.error(`[OLLAMA ADAPTER] Failed to parse chunk:`, {
+                line: line.substring(0, 200),
+                error: parseError instanceof Error ? parseError.message : 'Unknown',
+              });
             }
           }
         }
       }
     } catch (error) {
+      console.error(`[OLLAMA ADAPTER] Stream generation error:`, error);
       yield {
         type: 'error',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -820,6 +859,8 @@ export class SSEStreamingAdapter implements StreamingPort {
     console.log(`[STREAMING ADAPTER] send() called for sessionId: ${sessionId}`, {
       chunkType: chunk.type,
       hasContent: !!(chunk as any).content,
+      error: (chunk as any).error,
+      content: (chunk as any).content?.substring(0, 100), // First 100 chars
     });
     
     const session = this.sessions.get(sessionId);
@@ -830,7 +871,9 @@ export class SSEStreamingAdapter implements StreamingPort {
 
     // Send SSE event
     const data = `data: ${JSON.stringify(chunk)}\n\n`;
-    console.log(`[STREAMING ADAPTER] Writing ${data.length} bytes to session`);
+    console.log(`[STREAMING ADAPTER] Writing ${data.length} bytes to session`, {
+      preview: data.substring(0, 200), // First 200 chars for debugging
+    });
     session.write(data);
   }
 
@@ -893,7 +936,7 @@ export class DefaultModelRegistry implements ModelRegistryPort {
       console.log(`[MODEL REGISTRY] Model ${modelId} found in cache`);
     }
     const result = this.models.get(modelId) || null;
-    console.log(`[MODEL REGISTRY] Returning model info:`, result ? { id: result.id, name: result.name } : 'null');
+    console.log(`[MODEL REGISTRY] Returning model info:`, result ? { id: result.id, displayName: result.displayName } : 'null');
     return result;
   }
 
