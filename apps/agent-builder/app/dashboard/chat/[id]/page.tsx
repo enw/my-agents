@@ -21,6 +21,13 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  id?: string; // For queued messages
+}
+
+interface QueuedMessage {
+  id: string;
+  content: string;
+  timestamp: Date;
 }
 
 export default function ChatPage() {
@@ -32,6 +39,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
+  const [processingQueue, setProcessingQueue] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentRun, setCurrentRun] = useState<any>(null);
   const [showTrace, setShowTrace] = useState(false);
@@ -282,19 +291,69 @@ export default function ChatPage() {
     }
   }
 
-  async function handleSend() {
-    if (!input.trim() || loading) return;
+  function removeQueuedMessage(id: string) {
+    setQueuedMessages((prev) => prev.filter((msg) => msg.id !== id));
+  }
 
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
+  function addToQueue(message: string) {
+    const queuedMessage: QueuedMessage = {
+      id: crypto.randomUUID(),
+      content: message,
       timestamp: new Date(),
     };
+    setQueuedMessages((prev) => [...prev, queuedMessage]);
+    return queuedMessage.id;
+  }
 
-    setMessages((prev) => [...prev, userMessage]);
-    const messageToSend = input;
+  const processQueueRef = useRef(false);
+
+  async function processNextInQueue() {
+    if (processQueueRef.current) return;
+    
+    setQueuedMessages((prev) => {
+      if (prev.length === 0) {
+        processQueueRef.current = false;
+        setProcessingQueue(false);
+        return prev;
+      }
+      
+      processQueueRef.current = true;
+      setProcessingQueue(true);
+      
+      const nextMessage = prev[0];
+      
+      // Process the message
+      processMessage(nextMessage.content, nextMessage.id).finally(() => {
+        // After processing, try to process next
+        processQueueRef.current = false;
+        setProcessingQueue(false);
+        setQueuedMessages((current) => {
+          if (current.length > 0) {
+            // Process next message
+            setTimeout(() => processNextInQueue(), 100);
+          }
+          return current;
+        });
+      });
+      
+      // Remove from queue
+      return prev.slice(1);
+    });
+  }
+
+  useEffect(() => {
+    // Process queue when it changes and we're not already processing
+    if (!processQueueRef.current && queuedMessages.length > 0) {
+      processNextInQueue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedMessages.length]);
+
+  async function handleSend() {
+    if (!input.trim()) return;
+
+    const messageToSend = input.trim();
     setInput('');
-    setLoading(true);
     setError(null);
     
     // Keep focus on input after clearing
@@ -302,6 +361,27 @@ export default function ChatPage() {
     
     // Reset to latest conversation when sending new message
     setCurrentRunIndex(-1);
+
+    // Add to queue
+    const queueId = addToQueue(messageToSend);
+    
+    // Add user message to display immediately
+    const userMessage: Message = {
+      role: 'user',
+      content: messageToSend,
+      timestamp: new Date(),
+      id: queueId,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    
+    // Process queue if not already processing
+    if (!processQueueRef.current) {
+      processNextInQueue();
+    }
+  }
+
+  async function processMessage(messageToSend: string, messageId: string) {
+    setLoading(true);
 
     try {
       // Try streaming first
@@ -463,6 +543,8 @@ export default function ChatPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
       setLoading(false);
+      // Remove the user message if processing failed
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
       // Refocus input even on error
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -836,16 +918,16 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Type your message..."
-                disabled={loading}
+                disabled={false}
                 autoFocus
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
               <button
                 onClick={handleSend}
-                disabled={loading || !input.trim()}
+                disabled={!input.trim()}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {loading ? 'Sending...' : 'Send'}
+                {processingQueue ? `Sending... (${queuedMessages.length} queued)` : 'Send'}
               </button>
             </div>
           </div>
