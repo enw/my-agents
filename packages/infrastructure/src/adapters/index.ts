@@ -565,6 +565,12 @@ export class OpenRouterModelAdapter implements ModelPort {
     try {
       const openRouterRequest = this.convertToOpenRouterFormat(request);
 
+      console.log(`[OPENROUTER ADAPTER] Starting streaming request`, {
+        model: this.modelName,
+        messageCount: openRouterRequest.messages.length,
+        hasTools: !!openRouterRequest.tools && openRouterRequest.tools.length > 0,
+      });
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -582,9 +588,14 @@ export class OpenRouterModelAdapter implements ModelPort {
       });
 
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Could not read error response');
+        console.error(`[OPENROUTER ADAPTER] Request failed: ${response.status} ${response.statusText}`, {
+          model: this.modelName,
+          errorBody: errorText.substring(0, 500),
+        });
         yield {
           type: 'error',
-          error: `OpenRouter request failed: ${response.statusText}`,
+          error: `OpenRouter request failed: ${response.statusText} - ${errorText.substring(0, 200)}`,
         };
         return;
       }
@@ -597,10 +608,22 @@ export class OpenRouterModelAdapter implements ModelPort {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // Yield usage when stream ends, even if [DONE] wasn't received
+          if (usage) {
+            yield {
+              type: 'done',
+              usage,
+            };
+          } else {
+            yield { type: 'done' };
+          }
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -610,13 +633,25 @@ export class OpenRouterModelAdapter implements ModelPort {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') {
-              yield { type: 'done' };
+              yield {
+                type: 'done',
+                usage: usage || { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+              };
               return;
             }
 
             try {
               const chunk = JSON.parse(data);
               const delta = chunk.choices[0]?.delta;
+
+              // Capture usage information if present in chunk (OpenRouter/OpenAI format)
+              if (chunk.usage) {
+                usage = {
+                  inputTokens: chunk.usage.prompt_tokens || 0,
+                  outputTokens: chunk.usage.completion_tokens || 0,
+                  totalTokens: chunk.usage.total_tokens || ((chunk.usage.prompt_tokens || 0) + (chunk.usage.completion_tokens || 0)),
+                };
+              }
 
               if (delta?.content) {
                 yield { type: 'content', content: delta.content };

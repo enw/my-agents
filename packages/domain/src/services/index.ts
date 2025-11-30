@@ -505,8 +505,23 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
 
   /**
    * Get model adapter using factory
+   * For OpenRouter models, uses the original model ID from metadata to ensure correct format
    */
   private async getModelAdapter(modelId: string): Promise<ModelPort> {
+    // Look up model info to get the original model ID for OpenRouter
+    const modelInfo = await this.modelRegistry.getModelInfo(modelId);
+    
+    // For OpenRouter models, use the original model.id from metadata (stored in metadata.name)
+    // This ensures we use the exact format that OpenRouter expects
+    if (modelInfo?.provider === 'openrouter' && modelInfo.metadata?.name) {
+      const originalModelId = modelInfo.metadata.name as string;
+      console.log(`[MODEL ADAPTER] Using original OpenRouter model ID from metadata: ${originalModelId}`);
+      // Still need to pass the full modelId to factory, but extract correctly
+      // The factory will split and reconstruct, so we pass the stored ID but note the original
+      // Actually, let's create a temporary adapter using the original ID
+      return this.modelFactory.create(`openrouter:${originalModelId}`);
+    }
+    
     return this.modelFactory.create(modelId);
   }
 }

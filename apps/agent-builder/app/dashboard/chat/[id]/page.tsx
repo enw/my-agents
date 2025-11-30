@@ -598,11 +598,11 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col transition-all ${showTrace ? 'mr-80' : ''}`}>
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className={`flex-1 flex flex-col transition-all overflow-hidden h-full ${showTrace ? 'mr-80' : ''}`}>
+        {/* Header - FIXED */}
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
           <div className="max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-2">
               <Link
@@ -702,9 +702,9 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Messages */}
+        {/* Messages - SCROLLABLE */}
         <div 
-          className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6"
+          className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6 min-h-0 overscroll-contain"
           onClick={() => {
             // Refocus input when clicking in message area
             setTimeout(() => inputRef.current?.focus(), 100);
@@ -928,8 +928,8 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Input */}
-        <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        {/* Input - FIXED AT BOTTOM */}
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
           <div className="max-w-4xl mx-auto px-4 py-4">
             {error && (
               <div className="mb-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded text-sm">
