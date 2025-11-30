@@ -168,6 +168,8 @@ export interface Agent {
     temperature?: number;
     maxTokens?: number;
     topP?: number;
+    messageWindowLength?: number; // Default: 4
+    structuredMemory?: boolean; // Default: true
   };
   createdAt: Date;
   updatedAt: Date;
@@ -184,6 +186,8 @@ export interface CreateAgentData {
     temperature?: number;
     maxTokens?: number;
     topP?: number;
+    messageWindowLength?: number; // Default: 4
+    structuredMemory?: boolean; // Default: true
   };
 }
 
@@ -199,6 +203,8 @@ export interface UpdateAgentData {
     temperature?: number;
     maxTokens?: number;
     topP?: number;
+    messageWindowLength?: number; // Default: 4
+    structuredMemory?: boolean; // Default: true
   };
 }
 

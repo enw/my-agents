@@ -25,6 +25,9 @@ export default function Dashboard() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [forkingAgent, setForkingAgent] = useState<string | null>(null);
+  const [forkName, setForkName] = useState('');
+  const [forkCopyMemory, setForkCopyMemory] = useState(true);
 
   useEffect(() => {
     loadAgents();
@@ -94,6 +97,43 @@ export default function Dashboard() {
     }
   }
 
+  function handleForkClick(agentId: string, agentName: string) {
+    setForkingAgent(agentId);
+    setForkName(`${agentName} (Copy)`);
+    setForkCopyMemory(true);
+  }
+
+  async function handleForkSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!forkingAgent || !forkName.trim()) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/agents/${forkingAgent}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: forkName.trim(),
+          copyMemory: forkCopyMemory,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fork agent');
+      }
+
+      const newAgent = await response.json();
+      setForkingAgent(null);
+      setForkName('');
+      await loadAgents();
+      router.push(`/dashboard/chat/${newAgent.id}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to fork agent');
+    }
+  }
+
   return (
     <div className="p-8">
       <motion.div
@@ -158,6 +198,13 @@ export default function Dashboard() {
                     ✏️
                   </button>
                   <button
+                    onClick={() => handleForkClick(agent.id, agent.name)}
+                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs transition-colors duration-150"
+                    title="Fork agent"
+                  >
+                    🍴
+                  </button>
+                  <button
                     onClick={() => handleDelete(agent.id)}
                     className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs transition-colors duration-150"
                     title="Delete agent"
@@ -211,6 +258,67 @@ export default function Dashboard() {
               </div>
             </AnimatedCard>
           ))}
+        </div>
+      )}
+
+      {/* Fork Agent Modal */}
+      {forkingAgent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              Fork Agent
+            </h2>
+            <form onSubmit={handleForkSubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  New Agent Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={forkName}
+                  onChange={(e) => setForkName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Enter name for forked agent"
+                  autoFocus
+                />
+              </div>
+              <div className="mb-6">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={forkCopyMemory}
+                    onChange={(e) => setForkCopyMemory(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Copy structured memory
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                  If unchecked, the new agent will start with empty memory
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForkingAgent(null);
+                    setForkName('');
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Fork Agent
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

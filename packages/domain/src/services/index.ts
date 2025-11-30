@@ -21,6 +21,8 @@ import {
   UnauthorizedToolError,
   ValidationError,
 } from '../ports';
+import { MessageWindowingService } from './message-windowing';
+import { StructuredMemoryService } from './structured-memory';
 
 // ============================================================================
 // AGENT EXECUTION SERVICE - Core Business Logic
@@ -81,7 +83,9 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     private toolPort: ToolPort,
     private tracePort: TracePort,
     private streamingPort: StreamingPort,
-    private modelFactory: any // ModelFactory from infrastructure
+    private modelFactory: any, // ModelFactory from infrastructure
+    private messageWindowingService?: MessageWindowingService,
+    private structuredMemoryService?: StructuredMemoryService
   ) {}
 
   async execute(
@@ -270,9 +274,55 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     }));
     console.log(`[AGENT LOOP] Tools loaded: ${toolDefinitions.map(t => t.name).join(', ')}`);
 
+    // Load structured memory if enabled
+    const memoryMessages: Message[] = [];
+    if (agent.settings?.structuredMemory !== false && this.structuredMemoryService) {
+      try {
+        const memoryContent = await this.structuredMemoryService.getMemoryForMessages(agent.id);
+        if (memoryContent) {
+          memoryMessages.push({
+            role: 'system',
+            content: `Conversation Memory:\n\n${memoryContent}`,
+          });
+          console.log(`[AGENT LOOP] Loaded structured memory for agent ${agent.id}`);
+        }
+      } catch (error) {
+        console.error(`[AGENT LOOP] Failed to load structured memory:`, error);
+        // Continue without memory if loading fails
+      }
+    }
+
+    // Apply message windowing if enabled and history is long enough
+    let processedHistory = conversationHistory;
+    const windowSize = agent.settings?.messageWindowLength ?? 4;
+    if (
+      windowSize > 0 &&
+      conversationHistory.length > windowSize &&
+      this.messageWindowingService
+    ) {
+      try {
+        console.log(
+          `[AGENT LOOP] Compressing conversation history (${conversationHistory.length} messages, window: ${windowSize})`
+        );
+        processedHistory = await this.messageWindowingService.compressMessages(
+          conversationHistory,
+          windowSize,
+          model
+        );
+        console.log(
+          `[AGENT LOOP] History compressed to ${processedHistory.length} messages`
+        );
+      } catch (error) {
+        console.error(`[AGENT LOOP] Message windowing failed, using original history:`, error);
+        // Fallback to original history if compression fails
+        processedHistory = conversationHistory;
+      }
+    }
+
     // Start conversation
     const messages: Message[] = [
-      ...conversationHistory,
+      ...memoryMessages,
+      ...processedHistory,
       { role: 'user' as const, content: userMessage },
     ];
 
@@ -446,6 +496,17 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       console.warn(`[AGENT LOOP] Max turns (${maxTurns}) reached for runId: ${runId}`);
     } else {
       console.log(`[AGENT LOOP] Loop completed normally after ${turnNumber - 1} turns`);
+    }
+
+    // Update structured memory after loop completes
+    if (agent.settings?.structuredMemory !== false && this.structuredMemoryService) {
+      try {
+        console.log(`[AGENT LOOP] Updating structured memory for agent ${agent.id}`);
+        await this.structuredMemoryService.updateMemory(agent.id, runId, messages, model);
+      } catch (error) {
+        console.error(`[AGENT LOOP] Failed to update structured memory:`, error);
+        // Don't throw - continue execution even if memory update fails
+      }
     }
 
     if (streamSessionId) {

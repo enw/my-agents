@@ -19,6 +19,8 @@ import {
   AgentValidationService,
   DefaultAgentExecutionService,
   ToolRegistryService,
+  MessageWindowingService,
+  StructuredMemoryService,
 } from '@my-agents/domain';
 
 import {
@@ -94,6 +96,7 @@ export class DependencyContainer {
   private _executionService?: AgentExecutionService;
   private _validationService?: AgentValidationService;
   private _toolRegistryService?: ToolRegistryService;
+  private _structuredMemoryService?: StructuredMemoryService;
 
   // Application Services
   // Note: UseCaseFactory removed to avoid circular dependency with @my-agents/application
@@ -176,15 +179,28 @@ export class DependencyContainer {
   // Domain Services
   // ============================================================================
 
+  get structuredMemoryService(): StructuredMemoryService {
+    if (!this._structuredMemoryService) {
+      this._structuredMemoryService = new StructuredMemoryService(this.config.workspaceRoot);
+    }
+    return this._structuredMemoryService;
+  }
+
   get executionService(): AgentExecutionService {
     if (!this._executionService) {
+      // Create memory services
+      const messageWindowingService = new MessageWindowingService();
+      const structuredMemoryService = this.structuredMemoryService;
+      
       this._executionService = new DefaultAgentExecutionService(
         this.agentPort,
         this.modelRegistry,
         this.toolPort,
         this.tracePort,
         this.streamingPort,
-        this.modelFactory
+        this.modelFactory,
+        messageWindowingService,
+        structuredMemoryService
       );
     }
     return this._executionService;

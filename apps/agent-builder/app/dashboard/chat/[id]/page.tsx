@@ -1059,13 +1059,23 @@ export default function ChatPage() {
               )}
             </div>
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {agent.name}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {agent.description}
-                </p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {agent.name}
+                  </h1>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {agent.description}
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
+                  className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition flex items-center gap-1.5"
+                  title="Edit agent"
+                >
+                  <span>✏️</span>
+                  <span>Edit</span>
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 <div>

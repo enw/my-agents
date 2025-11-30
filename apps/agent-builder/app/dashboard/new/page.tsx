@@ -39,6 +39,7 @@ export default function NewAgentPage() {
       maxTokens: 4096,
       topP: 1.0,
     },
+    initialMemory: '',
   });
 
   const [tagInput, setTagInput] = useState('');
@@ -301,6 +302,24 @@ export default function NewAgentPage() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Structured Memory (Optional) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Initial Structured Memory (Optional)
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              Pre-populate the agent's memory with key information. This will be included in every conversation.
+              The memory is automatically updated after conversations, but you can set initial context here.
+            </p>
+            <textarea
+              rows={8}
+              value={formData.initialMemory}
+              onChange={(e) => setFormData(prev => ({ ...prev, initialMemory: e.target.value }))}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+              placeholder={`# Conversation Memory\n\n## KEY CONVO DATA\n[Important facts, decisions, user preferences]\n\n## CURRENT TOPIC\n[Current conversation focus]`}
+            />
           </div>
 
           {/* Tags */}

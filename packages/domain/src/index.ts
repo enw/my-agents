@@ -8,6 +8,10 @@ export {
   ToolRegistryService,
 } from './services';
 
+// Export memory services
+export { MessageWindowingService } from './services/message-windowing';
+export { StructuredMemoryService } from './services/structured-memory';
+
 export type {
   AgentExecutionService,
   ExecutionOptions,

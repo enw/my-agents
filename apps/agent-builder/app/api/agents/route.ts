@@ -32,6 +32,18 @@ export async function POST(request: NextRequest) {
       tags: body.tags || [],
     });
     
+    // If initial memory is provided, write it to the memory file
+    if (body.initialMemory && typeof body.initialMemory === 'string' && body.initialMemory.trim()) {
+      try {
+        const memoryService = container.structuredMemoryService;
+        await memoryService.writeMemory(agent.id, body.initialMemory.trim());
+        console.log(`[AGENT API] Initial memory written for agent ${agent.id}`);
+      } catch (memoryError) {
+        console.error('Error writing initial memory:', memoryError);
+        // Don't fail agent creation if memory write fails
+      }
+    }
+    
     return NextResponse.json(agent, { status: 201 });
   } catch (error) {
     console.error('Error creating agent:', error);

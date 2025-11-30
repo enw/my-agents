@@ -74,12 +74,20 @@ export default function EditAgentPage() {
   const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [memoryContent, setMemoryContent] = useState<string>('');
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memorySaving, setMemorySaving] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [forking, setForking] = useState(false);
+  const [forkName, setForkName] = useState('');
+  const [forkCopyMemory, setForkCopyMemory] = useState(true);
 
   useEffect(() => {
     loadAgent();
     loadModels();
     loadTools();
     loadPromptVersions();
+    loadMemory();
   }, [agentId]);
 
   async function loadAgent() {
@@ -142,6 +150,49 @@ export default function EditAgentPage() {
       }
     } catch (err) {
       console.error('Failed to load prompt versions:', err);
+    }
+  }
+
+  async function loadMemory() {
+    setMemoryLoading(true);
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/agents/${agentId}/memory`);
+      if (response.ok) {
+        const data = await response.json();
+        setMemoryContent(data.content || '');
+      } else {
+        // Memory file doesn't exist yet - that's okay
+        setMemoryContent('');
+      }
+    } catch (err) {
+      console.error('Failed to load memory:', err);
+      setMemoryError(err instanceof Error ? err.message : 'Failed to load memory');
+    } finally {
+      setMemoryLoading(false);
+    }
+  }
+
+  async function saveMemory() {
+    setMemorySaving(true);
+    setMemoryError(null);
+    try {
+      const response = await fetch(`/api/agents/${agentId}/memory`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: memoryContent }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save memory');
+      }
+
+      alert('Memory saved successfully!');
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Failed to save memory');
+    } finally {
+      setMemorySaving(false);
     }
   }
 
@@ -246,6 +297,42 @@ export default function EditAgentPage() {
       setError(err instanceof Error ? err.message : 'Failed to update agent');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleForkClick() {
+    setForking(true);
+    setForkName(`${formData.name} (Copy)`);
+    setForkCopyMemory(true);
+  }
+
+  async function handleForkSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!forkName.trim()) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/agents/${agentId}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: forkName.trim(),
+          copyMemory: forkCopyMemory,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fork agent');
+      }
+
+      const newAgent = await response.json();
+      setForking(false);
+      setForkName('');
+      router.push(`/dashboard/chat/${newAgent.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fork agent');
     }
   }
 
@@ -526,6 +613,59 @@ export default function EditAgentPage() {
             </div>
           </div>
 
+          {/* Structured Memory Section */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Structured Memory
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  This memory file is automatically updated after each conversation. You can manually edit it here.
+                  The content is included in every message sent to the model.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={loadMemory}
+                  disabled={memoryLoading}
+                  className="text-sm px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {memoryLoading ? 'Loading...' : 'Reload'}
+                </button>
+                <button
+                  type="button"
+                  onClick={saveMemory}
+                  disabled={memorySaving}
+                  className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {memorySaving ? 'Saving...' : 'Save Memory'}
+                </button>
+              </div>
+            </div>
+            
+            {memoryError && (
+              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg text-sm">
+                {memoryError}
+              </div>
+            )}
+            
+            <textarea
+              rows={12}
+              value={memoryContent}
+              onChange={(e) => setMemoryContent(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+              placeholder="Memory file will load here... If empty, the memory file doesn't exist yet and will be created after the first conversation."
+            />
+            
+            {memoryContent && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                {memoryContent.split('\n').length} lines
+              </p>
+            )}
+          </div>
+
           {/* Tags */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -577,6 +717,13 @@ export default function EditAgentPage() {
               Cancel
             </button>
             <button
+              type="button"
+              onClick={handleForkClick}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            >
+              Fork Agent
+            </button>
+            <button
               type="submit"
               disabled={saving}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
@@ -586,6 +733,67 @@ export default function EditAgentPage() {
           </div>
         </form>
       </div>
+
+      {/* Fork Agent Modal */}
+      {forking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              Fork Agent
+            </h2>
+            <form onSubmit={handleForkSubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  New Agent Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={forkName}
+                  onChange={(e) => setForkName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Enter name for forked agent"
+                  autoFocus
+                />
+              </div>
+              <div className="mb-6">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={forkCopyMemory}
+                    onChange={(e) => setForkCopyMemory(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Copy structured memory
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                  If unchecked, the new agent will start with empty memory
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForking(false);
+                    setForkName('');
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Fork Agent
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

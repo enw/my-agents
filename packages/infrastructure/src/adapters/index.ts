@@ -808,6 +808,15 @@ export class SqliteAgentRepository implements AgentPort {
   constructor(private db: any) {} // Drizzle DB instance
 
   private mapDbRowToAgent(row: any): Agent {
+    const parsedSettings = row.settings ? JSON.parse(row.settings) : {};
+    
+    // Apply defaults for new memory settings
+    const settings = {
+      ...parsedSettings,
+      messageWindowLength: parsedSettings.messageWindowLength ?? 4,
+      structuredMemory: parsedSettings.structuredMemory ?? true,
+    };
+    
     return {
       id: row.id,
       name: row.name,
@@ -816,7 +825,7 @@ export class SqliteAgentRepository implements AgentPort {
       defaultModel: row.defaultModel,
       allowedTools: JSON.parse(row.allowedTools || '[]'),
       tags: JSON.parse(row.tags || '[]'),
-      settings: row.settings ? JSON.parse(row.settings) : undefined,
+      settings: Object.keys(settings).length > 0 ? settings : undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
