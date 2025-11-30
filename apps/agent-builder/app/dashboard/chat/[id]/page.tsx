@@ -47,7 +47,7 @@ export default function ChatPage() {
   const [models, setModels] = useState<any[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [previousRuns, setPreviousRuns] = useState<any[]>([]);
-  const [showRunSelector, setShowRunSelector] = useState(false);
+  const [continueRunPaneOpen, setContinueRunPaneOpen] = useState(true); // Left pane open by default
   const [currentRunIndex, setCurrentRunIndex] = useState<number>(-1); // -1 means viewing latest/new conversation
   const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
   const [traceWidth, setTraceWidth] = useState<number>(320); // Default width in pixels (w-80 = 320px)
@@ -206,6 +206,16 @@ export default function ChatPage() {
     }
   }
 
+  function startNewChat() {
+    setMessages([]);
+    setCurrentRun(null);
+    setRunToContinue(null);
+    setCurrentRunIndex(-1);
+    setError(null);
+    // Focus input after starting new chat
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
   async function fetchRunDetails(runId: string) {
     try {
       const response = await fetch(`/api/runs/${runId}`);
@@ -276,7 +286,9 @@ export default function ChatPage() {
         setCurrentRunIndex(runIndex);
       }
 
-      setShowRunSelector(false);
+      // Optionally close the pane after selecting a conversation (optional UX improvement)
+      // setContinueRunPaneOpen(false);
+
       scrollToBottom();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversation');
@@ -660,18 +672,106 @@ export default function ChatPage() {
 
   return (
     <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
+      {/* Continue Run Left Pane */}
+      <aside
+        className={`${
+          continueRunPaneOpen ? 'w-80' : 'w-0'
+        } transition-all duration-300 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-hidden flex-shrink-0`}
+      >
+        <div className="h-full flex flex-col">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
+              Continue Previous Conversation
+            </h2>
+            <button
+              onClick={() => setContinueRunPaneOpen(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+              title="Toggle Continue Run Sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <button
+              onClick={startNewChat}
+              className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Chat
+            </button>
+            {previousRuns.length === 0 ? (
+              <p className="text-gray-600 dark:text-gray-400 text-center py-8">
+                No previous conversations found
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {previousRuns.map((run) => (
+                  <div
+                    key={run.id}
+                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition"
+                    onClick={() => {
+                      loadConversation(run.id);
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white text-sm">
+                          {new Date(run.createdAt).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {run.turns?.length || 0} turns • {run.totalTokens.totalTokens} tokens
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {run.modelUsed}
+                      </span>
+                    </div>
+                    {run.turns && run.turns.length > 0 && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                        {run.turns[run.turns.length - 1].userMessage}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
       {/* Main Chat Area */}
       <div className={`flex-1 flex flex-col transition-all overflow-hidden h-full ${showTrace ? 'mr-80' : ''}`}>
         {/* Header - FIXED */}
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
           <div className="max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-2">
-              <Link
-                href="/dashboard"
-                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
-              >
-                ← Back to Dashboard
-              </Link>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setContinueRunPaneOpen(!continueRunPaneOpen)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+                  title="Toggle Continue Run Sidebar"
+                >
+                  {continueRunPaneOpen ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </button>
+                <Link
+                  href="/dashboard"
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
+                >
+                  ← Back to Dashboard
+                </Link>
+              </div>
               {/* Navigation Controls */}
               {allRuns.length > 0 && (
                 <div className="flex items-center gap-2">
@@ -743,13 +843,6 @@ export default function ChatPage() {
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowRunSelector(!showRunSelector)}
-                    className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                    title="Continue previous conversation"
-                  >
-                    Continue Run
-                  </button>
                   <ThemeToggle />
                   <button
                     onClick={() => setShowTrace(!showTrace)}
@@ -1051,63 +1144,6 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
-
-      {/* Run Selector Modal */}
-      {showRunSelector && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Continue Previous Conversation
-              </h2>
-              <button
-                onClick={() => setShowRunSelector(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {previousRuns.length === 0 ? (
-                <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-                  No previous conversations found
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {previousRuns.map((run) => (
-                    <div
-                      key={run.id}
-                      className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                      onClick={() => {
-                        loadConversation(run.id);
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {new Date(run.createdAt).toLocaleString()}
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {run.turns?.length || 0} turns • {run.totalTokens.totalTokens} tokens
-                          </p>
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {run.modelUsed}
-                        </span>
-                      </div>
-                      {run.turns && run.turns.length > 0 && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                          {run.turns[run.turns.length - 1].userMessage}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Trace Viewer Sidebar */}
       {showTrace && (
