@@ -350,6 +350,16 @@ export interface TracePort {
    * @throws NotFoundError if run doesn't exist
    */
   deleteRun(runId: string): Promise<void>;
+
+  /**
+   * Get pricing for a model, fetching from OpenRouter if not in database
+   */
+  getModelPricing(modelId: string, provider: string, forceUpdate?: boolean): Promise<{ inputPricePer1k: number; outputPricePer1k: number } | null>;
+
+  /**
+   * Calculate estimated cost for a run
+   */
+  calculateRunCost(runId: string): Promise<number | null>;
 }
 
 export interface Run {
@@ -360,6 +370,8 @@ export interface Run {
   turns: Turn[];
   totalTokens: TokenUsage;
   totalToolCalls: number;
+  totalDurationMs?: number; // Total execution duration in milliseconds
+  modelSettings?: ModelSettings; // Model settings used for this run
   createdAt: Date;
   completedAt?: Date;
   error?: string;
@@ -370,6 +382,7 @@ export type RunStatus = 'running' | 'completed' | 'error';
 export interface CreateRunData {
   agentId: string;
   modelUsed: string;
+  modelSettings?: ModelSettings; // Optional model settings
 }
 
 export interface Turn {
@@ -378,6 +391,8 @@ export interface Turn {
   assistantMessage: string;
   toolExecutions: ToolExecution[];
   usage: TokenUsage;
+  startedAt?: Date; // When turn started
+  durationMs?: number; // Turn duration in milliseconds
   timestamp: Date;
 }
 
@@ -386,6 +401,7 @@ export interface ToolExecution {
   toolName: string;
   parameters: Record<string, unknown>;
   result: ToolResult;
+  reasoning?: string; // Optional reasoning for tool call (if available from model)
   timestamp: Date;
 }
 

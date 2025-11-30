@@ -67,6 +67,11 @@ export interface ExecutionOptions {
   maxTurns?: number; // Prevent infinite loops (default: 10)
   streamSessionId?: string; // For streaming responses
   conversationHistory?: Message[]; // For continuing conversations
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  }; // Override model settings
 }
 
 /**
@@ -120,9 +125,12 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
 
     // 3. Create run trace
     console.log(`[AGENT EXECUTION] Creating run trace...`);
+    // Get model settings from agent or options
+    const modelSettings = options.settings || agent.settings || undefined;
     const run = await this.tracePort.createRun({
       agentId: agent.id,
       modelUsed: modelId,
+      modelSettings,
     });
     console.log(`[AGENT EXECUTION] Run created with ID: ${run.id}`);
 
@@ -272,9 +280,10 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     console.log(`[AGENT LOOP] Starting loop with turnNumber: ${turnNumber}, maxTurns: ${maxTurns}`);
 
     while (continueLoop && turnNumber <= maxTurns) {
+      const turnStartTime = new Date();
       console.log(`[AGENT LOOP] ===== Turn ${turnNumber}/${maxTurns} =====`, {
         runId,
-        timestamp: new Date().toISOString(),
+        timestamp: turnStartTime.toISOString(),
       });
       
       // Call LLM
@@ -386,6 +395,8 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       }
 
       // Log turn
+      const turnEndTime = new Date();
+      const turnDurationMs = turnEndTime.getTime() - turnStartTime.getTime();
       console.log(`[AGENT LOOP] Logging turn ${turnNumber} to trace...`);
       const turn: Turn = {
         turnNumber,
@@ -393,10 +404,12 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
         assistantMessage: response.content,
         toolExecutions,
         usage: response.usage,
-        timestamp: new Date(),
+        startedAt: turnStartTime,
+        durationMs: turnDurationMs,
+        timestamp: turnEndTime,
       };
       await this.tracePort.appendTurn(runId, turn);
-      console.log(`[AGENT LOOP] Turn ${turnNumber} logged`);
+      console.log(`[AGENT LOOP] Turn ${turnNumber} logged (duration: ${turnDurationMs}ms)`);
 
       turnNumber++;
     }

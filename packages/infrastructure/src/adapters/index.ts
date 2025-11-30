@@ -37,7 +37,7 @@ import {
   ValidationError,
 } from '@my-agents/domain';
 
-import { agents, runs, turns, toolExecutions, promptVersions } from '../persistence/schema';
+import { agents, runs, turns, toolExecutions, promptVersions, modelPricing } from '../persistence/schema';
 import { eq, and, desc, asc, like, or, sql, gte, lte } from 'drizzle-orm';
 
 // ============================================================================
@@ -1248,8 +1248,124 @@ export class DefaultModelRegistry implements ModelRegistryPort {
   }
 
   private async refreshOpenRouterModels(): Promise<void> {
-    // Would fetch from OpenRouter API
-    // Similar implementation to Ollama
+    if (!this.openRouterApiKey) {
+      return;
+    }
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${this.openRouterApiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn('Failed to fetch OpenRouter models:', response.statusText);
+        return;
+      }
+
+      const data = await response.json();
+      
+      for (const model of data.data || []) {
+        // OpenRouter model IDs are in format like "minimax/minimax-m2:cloud"
+        const modelId = `openrouter:${model.id}`;
+        const modelName = model.id.toLowerCase();
+        
+        // Determine if model supports tools
+        const supportsTools = this.openRouterModelSupportsTools(model, modelName);
+        
+        // Extract context window from OpenRouter data
+        const contextWindow = model.context_length || 128000;
+        
+        this.models.set(modelId, {
+          id: modelId,
+          provider: 'openrouter',
+          displayName: model.name || model.id,
+          contextWindow,
+          supportsTools,
+          supportsStreaming: true,
+          cost: model.pricing ? {
+            inputPer1M: model.pricing.prompt || 0,
+            outputPer1M: model.pricing.completion || 0,
+          } : undefined,
+          strengths: this.extractStrengths(model),
+          metadata: {
+            name: model.id, // Full model ID like "minimax/minimax-m2:cloud"
+            description: model.description,
+            architecture: model.architecture,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch OpenRouter models:', error);
+    }
+  }
+
+  /**
+   * Check if an OpenRouter model supports tools based on model metadata
+   */
+  private openRouterModelSupportsTools(model: any, modelName: string): boolean {
+    // Check if OpenRouter explicitly marks it as supporting function calling
+    if (model.top_provider?.supports_function_calling === true) {
+      return true;
+    }
+
+    // Check model name patterns for known tool-supporting models
+    const toolSupportingPatterns = [
+      'minimax-m2',
+      'minimax',
+      'claude',
+      'gpt-4',
+      'gpt-4o',
+      'o1',
+      'qwen',
+      'deepseek',
+      'gemini',
+      'llama3.2',
+      'llama3.1',
+      'mistral',
+      'mixtral',
+    ];
+
+    for (const pattern of toolSupportingPatterns) {
+      if (modelName.includes(pattern.toLowerCase())) {
+        return true;
+      }
+    }
+
+    // Check description for tool-related keywords
+    const description = (model.description || '').toLowerCase();
+    if (description.includes('function calling') || 
+        description.includes('tool') || 
+        description.includes('agent')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract strengths/capabilities from model metadata
+   */
+  private extractStrengths(model: any): string[] {
+    const strengths: string[] = [];
+    const description = (model.description || '').toLowerCase();
+    const name = (model.name || model.id || '').toLowerCase();
+
+    if (description.includes('code') || name.includes('code') || name.includes('coding')) {
+      strengths.push('coding');
+    }
+    if (description.includes('tool') || description.includes('function')) {
+      strengths.push('tool-use');
+    }
+    if (description.includes('reason') || description.includes('math')) {
+      strengths.push('reasoning');
+    }
+    if (description.includes('vision') || name.includes('vision')) {
+      strengths.push('vision');
+    }
+
+    return strengths.length > 0 ? strengths : ['general-purpose'];
   }
 
   /**
@@ -1313,7 +1429,7 @@ export class DefaultModelRegistry implements ModelRegistryPort {
 export class SqliteTraceRepository implements TracePort {
   constructor(private db: any) {} // Drizzle DB instance
 
-  async createRun(data: { agentId: string; modelUsed: string }): Promise<Run> {
+  async createRun(data: { agentId: string; modelUsed: string; modelSettings?: any }): Promise<Run> {
     const id = crypto.randomUUID();
     const now = new Date();
 
@@ -1326,6 +1442,8 @@ export class SqliteTraceRepository implements TracePort {
       totalOutputTokens: 0,
       totalTokens: 0,
       totalToolCalls: 0,
+      totalDurationMs: null,
+      modelSettings: data.modelSettings ? JSON.stringify(data.modelSettings) : null,
       createdAt: now,
       completedAt: null,
       error: null,
@@ -1341,6 +1459,8 @@ export class SqliteTraceRepository implements TracePort {
       turns: [],
       totalTokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       totalToolCalls: 0,
+      totalDurationMs: undefined,
+      modelSettings: data.modelSettings,
       createdAt: now,
     };
   }
@@ -1373,6 +1493,8 @@ export class SqliteTraceRepository implements TracePort {
           inputTokens: turn.usage.inputTokens,
           outputTokens: turn.usage.outputTokens,
           totalTokens: turn.usage.totalTokens,
+          startedAt: turn.startedAt || existingTurn.startedAt || now,
+          durationMs: turn.durationMs || (turn.startedAt && now ? Date.now() - turn.startedAt.getTime() : null),
           timestamp: turn.timestamp || now,
         })
         .where(eq(turns.id, turnId));
@@ -1388,6 +1510,8 @@ export class SqliteTraceRepository implements TracePort {
         inputTokens: turn.usage.inputTokens,
         outputTokens: turn.usage.outputTokens,
         totalTokens: turn.usage.totalTokens,
+        startedAt: turn.startedAt || now,
+        durationMs: turn.durationMs || null,
         timestamp: turn.timestamp || now,
       });
     }
@@ -1413,6 +1537,7 @@ export class SqliteTraceRepository implements TracePort {
           output: toolExec.result.output || '',
           data: toolExec.result.data ? JSON.stringify(toolExec.result.data) : null,
           error: toolExec.result.error || null,
+          reasoning: toolExec.reasoning || null,
           executionTimeMs: toolExec.result.executionTimeMs || 0,
           timestamp: toolExec.timestamp,
         });
@@ -1483,6 +1608,7 @@ export class SqliteTraceRepository implements TracePort {
       output: execution.result.output || '',
       data: execution.result.data ? JSON.stringify(execution.result.data) : null,
       error: execution.result.error || null,
+      reasoning: execution.reasoning || null,
       executionTimeMs: execution.result.executionTimeMs || 0,
       timestamp: execution.timestamp,
     });
@@ -1495,6 +1621,12 @@ export class SqliteTraceRepository implements TracePort {
 
     if (status === 'completed' || status === 'error') {
       updateData.completedAt = new Date();
+      // Calculate total duration when run completes
+      const run = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
+      if (run && run.createdAt) {
+        const duration = updateData.completedAt.getTime() - run.createdAt.getTime();
+        updateData.totalDurationMs = duration;
+      }
     }
 
     if (error) {
@@ -1542,6 +1674,7 @@ export class SqliteTraceRepository implements TracePort {
           error: toolRow.error || undefined,
           executionTimeMs: toolRow.executionTimeMs,
         },
+        reasoning: toolRow.reasoning || undefined,
         timestamp: toolRow.timestamp,
       });
     }
@@ -1557,6 +1690,8 @@ export class SqliteTraceRepository implements TracePort {
         outputTokens: turnRow.outputTokens,
         totalTokens: turnRow.totalTokens,
       },
+      startedAt: turnRow.startedAt || undefined,
+      durationMs: turnRow.durationMs || undefined,
       timestamp: turnRow.timestamp,
     }));
 
@@ -1572,6 +1707,8 @@ export class SqliteTraceRepository implements TracePort {
         totalTokens: runRow.totalTokens,
       },
       totalToolCalls: runRow.totalToolCalls,
+      totalDurationMs: runRow.totalDurationMs || undefined,
+      modelSettings: runRow.modelSettings ? JSON.parse(runRow.modelSettings) : undefined,
       createdAt: runRow.createdAt,
       completedAt: runRow.completedAt || undefined,
       error: runRow.error || undefined,
@@ -1657,5 +1794,117 @@ export class SqliteTraceRepository implements TracePort {
     // Delete the run - cascade deletes will handle turns and tool executions
     // Since the schema has onDelete: 'cascade', we only need to delete the run
     await this.db.delete(runs).where(eq(runs.id, runId));
+  }
+
+  /**
+   * Get pricing for a model, fetching from OpenRouter if not in database
+   */
+  async getModelPricing(modelId: string, provider: string, forceUpdate: boolean = false): Promise<{ inputPricePer1k: number; outputPricePer1k: number } | null> {
+    // Check if we have pricing in database
+    if (!forceUpdate) {
+      const existing = await this.db
+        .select()
+        .from(modelPricing)
+        .where(
+          and(
+            eq(modelPricing.modelId, modelId),
+            eq(modelPricing.provider, provider)
+          )
+        )
+        .get();
+
+      if (existing) {
+        return {
+          inputPricePer1k: existing.inputPricePer1k,
+          outputPricePer1k: existing.outputPricePer1k,
+        };
+      }
+    }
+
+    // Fetch from OpenRouter if provider is openrouter
+    if (provider === 'openrouter') {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/models');
+        if (!response.ok) {
+          console.warn(`[PRICING] Failed to fetch pricing from OpenRouter: ${response.statusText}`);
+          return null;
+        }
+
+        const data = await response.json();
+        const model = data.data?.find((m: any) => m.id === modelId);
+        
+        if (model?.pricing) {
+          const pricing = {
+            inputPricePer1k: model.pricing.prompt || 0,
+            outputPricePer1k: model.pricing.completion || 0,
+          };
+
+          // Store in database (upsert)
+          const existing = await this.db
+            .select()
+            .from(modelPricing)
+            .where(
+              and(
+                eq(modelPricing.modelId, modelId),
+                eq(modelPricing.provider, provider)
+              )
+            )
+            .get();
+
+          if (existing) {
+            await this.db
+              .update(modelPricing)
+              .set({
+                inputPricePer1k: pricing.inputPricePer1k,
+                outputPricePer1k: pricing.outputPricePer1k,
+                lastUpdated: new Date(),
+              })
+              .where(eq(modelPricing.id, existing.id));
+          } else {
+            const id = crypto.randomUUID();
+            await this.db.insert(modelPricing).values({
+              id,
+              modelId,
+              provider,
+              inputPricePer1k: pricing.inputPricePer1k,
+              outputPricePer1k: pricing.outputPricePer1k,
+              lastUpdated: new Date(),
+            });
+          }
+
+          return pricing;
+        }
+      } catch (error) {
+        console.error(`[PRICING] Error fetching pricing from OpenRouter:`, error);
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate estimated cost for a run
+   */
+  async calculateRunCost(runId: string): Promise<number | null> {
+    const run = await this.getRun(runId);
+    if (!run) {
+      return null;
+    }
+
+    // Determine provider from model ID
+    const provider = run.modelUsed.startsWith('openrouter:') ? 'openrouter' : 'ollama';
+    const modelId = run.modelUsed.replace(/^(openrouter|ollama):/, '');
+
+    // Get pricing
+    const pricing = await this.getModelPricing(modelId, provider);
+    if (!pricing) {
+      return null; // No pricing available
+    }
+
+    // Calculate cost: (inputTokens / 1000 * inputPrice) + (outputTokens / 1000 * outputPrice)
+    const inputCost = (run.totalTokens.inputTokens / 1000) * pricing.inputPricePer1k;
+    const outputCost = (run.totalTokens.outputTokens / 1000) * pricing.outputPricePer1k;
+    return inputCost + outputCost;
   }
 }

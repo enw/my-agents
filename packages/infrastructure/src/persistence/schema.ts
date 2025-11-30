@@ -5,7 +5,7 @@
  * Uses Drizzle ORM for type-safe database access.
  */
 
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, unique } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================================================
@@ -45,6 +45,8 @@ export const runs = sqliteTable('runs', {
   totalOutputTokens: integer('total_output_tokens').notNull().default(0),
   totalTokens: integer('total_tokens').notNull().default(0),
   totalToolCalls: integer('total_tool_calls').notNull().default(0),
+  totalDurationMs: integer('total_duration_ms'), // Total execution duration in milliseconds
+  modelSettings: text('model_settings'), // JSON object: {temperature, maxTokens, topP}
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
   error: text('error'),
@@ -74,6 +76,8 @@ export const turns = sqliteTable('turns', {
   inputTokens: integer('input_tokens').notNull(),
   outputTokens: integer('output_tokens').notNull(),
   totalTokens: integer('total_tokens').notNull(),
+  startedAt: integer('started_at', { mode: 'timestamp' }), // When turn started
+  durationMs: integer('duration_ms'), // Turn duration in milliseconds
   timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
 });
 
@@ -103,6 +107,7 @@ export const toolExecutions = sqliteTable('tool_executions', {
   output: text('output').notNull(),
   data: text('data'), // JSON data as string
   error: text('error'),
+  reasoning: text('reasoning'), // Optional reasoning for tool call (if available from model)
   executionTimeMs: integer('execution_time_ms').notNull(),
   timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
 });
@@ -153,6 +158,21 @@ export const modelUsage = sqliteTable('model_usage', {
   qualityRating: integer('quality_rating'), // 1-5 (future feature)
   timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
 });
+
+// ============================================================================
+// MODEL PRICING TABLE - Track Model Costs for Cost Calculation
+// ============================================================================
+
+export const modelPricing = sqliteTable('model_pricing', {
+  id: text('id').primaryKey(),
+  modelId: text('model_id').notNull(),
+  provider: text('provider').notNull(), // 'ollama' | 'openrouter' | etc
+  inputPricePer1k: real('input_price_per_1k').notNull(), // Price per 1k input tokens
+  outputPricePer1k: real('output_price_per_1k').notNull(), // Price per 1k output tokens
+  lastUpdated: integer('last_updated', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  uniqueModelProvider: unique().on(table.modelId, table.provider),
+}));
 
 // ============================================================================
 // TYPE EXPORTS - For Use in Application Code
