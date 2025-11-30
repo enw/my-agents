@@ -307,7 +307,30 @@ Read, write, and list files in the workspace directory.
 }
 ```
 
-### 5. Code Executor Tool
+### 5. Wikipedia Tool 📚
+
+Search and retrieve Wikipedia articles with intelligent caching. Articles are cached for 7 days for fast subsequent access.
+
+**Features:**
+- Search Wikipedia articles
+- Get full articles or summaries
+- Automatic caching (7-day TTL)
+- Fast cache retrieval
+
+**Example:**
+```json
+{
+  "name": "wikipedia",
+  "parameters": {
+    "query": "Artificial Intelligence",
+    "action": "summary"
+  }
+}
+```
+
+**Documentation**: See [Wikipedia Tool Documentation](./docs/WIKIPEDIA_TOOL.md) for detailed usage.
+
+### 6. Code Executor Tool
 
 Execute Python or JavaScript code in a sandboxed environment.
 
@@ -554,6 +577,7 @@ ISC
 ## Documentation
 
 - [Web Search Tool](./docs/WEB_SEARCH.md) - Comprehensive guide to web search functionality
+- [Wikipedia Tool](./docs/WIKIPEDIA_TOOL.md) - Guide to Wikipedia search and caching
 - [SME Agent Design](./docs/SME_AGENT_DESIGN.md) - Guide for creating Subject Matter Expert agents
 - [SME Agent Implementation Status](./docs/SME_AGENT_IMPLEMENTATION_STATUS.md) - Current implementation status
 

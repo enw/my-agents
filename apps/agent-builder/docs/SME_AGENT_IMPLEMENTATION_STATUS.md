@@ -16,24 +16,32 @@ The following tools are currently available and can be used to create a function
    - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:673-805`
    - **Documentation:** See [Web Search Documentation](./WEB_SEARCH.md)
 
-2. **`http`** ✅
+2. **`wikipedia`** ✅
+   - Search Wikipedia articles by keyword
+   - Get full articles or summaries
+   - Intelligent caching (7-day TTL)
+   - Fast cache retrieval
+   - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:885-1120`
+   - **Documentation:** See [Wikipedia Tool Documentation](./WIKIPEDIA_TOOL.md)
+
+3. **`http`** ✅
    - HTTP/API requests with 10-second timeout
    - GET, POST, PUT, DELETE methods
    - Headers and body support
    - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:285-433`
 
-3. **`file`** ✅
+4. **`file`** ✅
    - Read/write/list files in workspace directory
    - Path traversal prevention
    - **Limitation:** Text files only (no PDF/document parsing)
    - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:128-283`
 
-4. **`shell`** ✅
+5. **`shell`** ✅
    - Execute shell commands in sandboxed temp directory
    - 10-second timeout, 1MB output limit
    - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:25-126`
 
-5. **`code_executor`** ✅
+6. **`code_executor`** ✅
    - Execute Python/JavaScript code in sandbox
    - 30-second timeout
    - **Location:** `packages/infrastructure/src/adapters/tools/index.ts:440-569`
@@ -51,6 +59,7 @@ The following tools are currently available and can be used to create a function
 ### Current Capabilities
 You can create an SME agent that:
 - ✅ Conducts web research using `web_search`
+- ✅ Retrieves Wikipedia articles with `wikipedia` (cached for speed)
 - ✅ Accesses APIs and documentation via `http`
 - ✅ Reads text files from workspace via `file`
 - ✅ Maintains structured memory across conversations
@@ -268,7 +277,7 @@ Even with current limitations, you can create a functional SME agent:
    - **Description:** "Expert researcher in [domain]"
    - **System Prompt:** Use template from `SME_AGENT_DESIGN.md` section 4
    - **Default Model:** Choose model with tool-use capability
-   - **Allowed Tools:** Select `web_search`, `http`, `file`
+   - **Allowed Tools:** Select `web_search`, `wikipedia`, `http`, `file`
    - **Settings:**
      - Temperature: `0.3`
      - Max Tokens: `4096`

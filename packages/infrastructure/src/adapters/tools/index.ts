@@ -883,6 +883,414 @@ export class SearchTool implements Tool {
 }
 
 // ============================================================================
+// WIKIPEDIA TOOL - Search and Retrieve Wikipedia Articles with Caching
+// ============================================================================
+
+export class WikipediaTool implements Tool {
+  name = 'wikipedia';
+  description = 'Search Wikipedia and retrieve article content. Results are cached for faster subsequent access.';
+
+  parameters: ToolParameterSchema = {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Wikipedia article title or search query',
+        required: true,
+      },
+      action: {
+        type: 'string',
+        description: 'Action to perform: "search" to find articles, "get" for full article, "summary" for summary only',
+        enum: ['search', 'get', 'summary'],
+        required: false,
+      },
+    },
+    required: ['query'],
+  };
+
+  private workspaceRoot: string;
+  private cacheDir: string;
+  private cacheExpiryMs: number = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+  constructor(workspaceRoot: string) {
+    this.workspaceRoot = workspaceRoot;
+    this.cacheDir = path.join(workspaceRoot, '.cache', 'wikipedia', 'articles');
+  }
+
+  async execute(parameters: Record<string, unknown>): Promise<ToolResult> {
+    const query = parameters.query as string;
+    const action = (parameters.action as string) || 'get';
+    const startTime = Date.now();
+
+    try {
+      // Ensure cache directory exists
+      await fs.mkdir(this.cacheDir, { recursive: true });
+
+      switch (action) {
+        case 'search':
+          return await this.searchArticles(query, startTime);
+        case 'get':
+        case 'summary':
+          return await this.getArticle(query, action === 'summary', startTime);
+        default:
+          return {
+            success: false,
+            output: `Unknown action: ${action}. Use "search", "get", or "summary"`,
+            error: 'Invalid action',
+            executionTimeMs: Date.now() - startTime,
+          };
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        output: `Wikipedia operation failed: ${error.message}`,
+        error: error.message,
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Search for Wikipedia articles
+   */
+  private async searchArticles(query: string, startTime: number): Promise<ToolResult> {
+    try {
+      const url = new URL('https://en.wikipedia.org/w/api.php');
+      url.searchParams.set('action', 'query');
+      url.searchParams.set('list', 'search');
+      url.searchParams.set('srsearch', query);
+      url.searchParams.set('srlimit', '10');
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('origin', '*');
+
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`Wikipedia API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const results = data.query?.search || [];
+
+      const formattedResults = results.map((result: any) => ({
+        title: result.title,
+        snippet: result.snippet,
+        wordcount: result.wordcount,
+        timestamp: result.timestamp,
+      }));
+
+      return {
+        success: true,
+        output: `Found ${formattedResults.length} articles matching "${query}"`,
+        data: {
+          query,
+          results: formattedResults,
+          action: 'search',
+        },
+        executionTimeMs: Date.now() - startTime,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        output: `Wikipedia search failed: ${error.message}`,
+        error: error.message,
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Get a Wikipedia article (with caching)
+   */
+  private async getArticle(
+    title: string,
+    summaryOnly: boolean,
+    startTime: number
+  ): Promise<ToolResult> {
+    // Normalize title for cache key
+    const cacheKey = this.normalizeTitle(title);
+    const cachePath = path.join(this.cacheDir, `${cacheKey}.json`);
+
+    // Check cache first
+    const cached = await this.getCachedArticle(cachePath);
+    if (cached) {
+      console.log(`[WIKIPEDIA] Cache hit for: ${title}`);
+      return {
+        success: true,
+        output: summaryOnly ? cached.summary : cached.content,
+        data: {
+          title: cached.title,
+          summary: cached.summary,
+          content: summaryOnly ? undefined : cached.content,
+          url: cached.url,
+          cached: true,
+          lastUpdated: cached.lastUpdated,
+        },
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+
+    // Cache miss - fetch from Wikipedia
+    console.log(`[WIKIPEDIA] Cache miss for: ${title}, fetching from API`);
+    try {
+      const article = await this.fetchArticleFromWikipedia(title, summaryOnly);
+      
+      // Cache the result
+      await this.cacheArticle(cachePath, article);
+
+      return {
+        success: true,
+        output: summaryOnly ? article.summary : article.content,
+        data: {
+          title: article.title,
+          summary: article.summary,
+          content: summaryOnly ? undefined : article.content,
+          url: article.url,
+          cached: false,
+          lastUpdated: new Date().toISOString(),
+        },
+        executionTimeMs: Date.now() - startTime,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        output: `Failed to fetch article: ${error.message}`,
+        error: error.message,
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  /**
+   * Fetch article from Wikipedia API
+   */
+  private async fetchArticleFromWikipedia(
+    title: string,
+    summaryOnly: boolean
+  ): Promise<{
+    title: string;
+    summary: string;
+    content: string;
+    url: string;
+  }> {
+    const url = new URL('https://en.wikipedia.org/w/api.php');
+    url.searchParams.set('action', 'query');
+    url.searchParams.set('prop', summaryOnly ? 'extracts' : 'extracts|info');
+    url.searchParams.set('exintro', summaryOnly ? '1' : '0');
+    url.searchParams.set('explaintext', '1');
+    url.searchParams.set('titles', title);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('origin', '*');
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error(`Wikipedia API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const pages = data.query?.pages;
+    const pageId = Object.keys(pages)[0];
+    const page = pages[pageId];
+
+    if (page.missing || !page.extract) {
+      throw new Error(`Article "${title}" not found`);
+    }
+
+    // Clean up the content (remove excessive whitespace, etc.)
+    const content = this.cleanContent(page.extract);
+    const summary = summaryOnly ? content : this.extractSummary(content);
+
+    return {
+      title: page.title,
+      summary,
+      content,
+      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title)}`,
+    };
+  }
+
+  /**
+   * Get cached article if it exists and is not expired
+   */
+  private async getCachedArticle(cachePath: string): Promise<{
+    title: string;
+    summary: string;
+    content: string;
+    url: string;
+    lastUpdated: string;
+  } | null> {
+    try {
+      const data = await fs.readFile(cachePath, 'utf-8');
+      const cached = JSON.parse(data);
+
+      // Check if cache is expired
+      const lastUpdated = new Date(cached.lastUpdated).getTime();
+      const now = Date.now();
+      if (now - lastUpdated > this.cacheExpiryMs) {
+        console.log(`[WIKIPEDIA] Cache expired for: ${cached.title}`);
+        return null;
+      }
+
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Cache an article to disk
+   */
+  private async cacheArticle(
+    cachePath: string,
+    article: {
+      title: string;
+      summary: string;
+      content: string;
+      url: string;
+    }
+  ): Promise<void> {
+    const cacheData = {
+      ...article,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    await fs.writeFile(cachePath, JSON.stringify(cacheData, null, 2), 'utf-8');
+    console.log(`[WIKIPEDIA] Cached article: ${article.title}`);
+  }
+
+  /**
+   * Normalize title for use as cache key
+   */
+  private normalizeTitle(title: string): string {
+    return title
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .toLowerCase();
+  }
+
+  /**
+   * Clean Wikipedia content (remove excessive whitespace, etc.)
+   */
+  private cleanContent(content: string): string {
+    return content
+      .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive newlines
+      .replace(/^\s+|\s+$/gm, '') // Trim lines
+      .trim();
+  }
+
+  /**
+   * Extract summary (first paragraph or ~500 chars)
+   */
+  private extractSummary(content: string): string {
+    const paragraphs = content.split('\n\n');
+    const firstParagraph = paragraphs[0] || content;
+    
+    if (firstParagraph.length <= 500) {
+      return firstParagraph;
+    }
+    
+    // Truncate to ~500 chars at sentence boundary
+    const truncated = firstParagraph.substring(0, 500);
+    const lastPeriod = truncated.lastIndexOf('.');
+    return lastPeriod > 0 
+      ? truncated.substring(0, lastPeriod + 1)
+      : truncated + '...';
+  }
+
+  /**
+   * Clear expired cache entries (utility method)
+   */
+  async clearExpiredCache(): Promise<number> {
+    let cleared = 0;
+    try {
+      const files = await fs.readdir(this.cacheDir);
+      const now = Date.now();
+
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+
+        const filePath = path.join(this.cacheDir, file);
+        try {
+          const data = await fs.readFile(filePath, 'utf-8');
+          const cached = JSON.parse(data);
+          const lastUpdated = new Date(cached.lastUpdated).getTime();
+
+          if (now - lastUpdated > this.cacheExpiryMs) {
+            await fs.unlink(filePath);
+            cleared++;
+          }
+        } catch {
+          // Invalid cache file - delete it
+          await fs.unlink(filePath);
+          cleared++;
+        }
+      }
+
+      if (cleared > 0) {
+        console.log(`[WIKIPEDIA] Cleared ${cleared} expired cache entries`);
+      }
+      return cleared;
+    } catch (error) {
+      console.error('[WIKIPEDIA] Error clearing cache:', error);
+      return cleared;
+    }
+  }
+
+  /**
+   * Get cache statistics
+   */
+  async getCacheStats(): Promise<{
+    totalArticles: number;
+    totalSize: number;
+    oldestEntry: string | null;
+    newestEntry: string | null;
+  }> {
+    try {
+      const files = await fs.readdir(this.cacheDir);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      
+      let totalSize = 0;
+      let oldest: Date | null = null;
+      let newest: Date | null = null;
+
+      for (const file of jsonFiles) {
+        const filePath = path.join(this.cacheDir, file);
+        try {
+          const stats = await fs.stat(filePath);
+          totalSize += stats.size;
+
+          const cached = await this.getCachedArticle(filePath);
+          if (cached) {
+            const date = new Date(cached.lastUpdated);
+            if (!oldest || date < oldest) oldest = date;
+            if (!newest || date > newest) newest = date;
+          }
+        } catch {
+          // Skip invalid files
+        }
+      }
+
+      return {
+        totalArticles: jsonFiles.length,
+        totalSize,
+        oldestEntry: oldest?.toISOString() || null,
+        newestEntry: newest?.toISOString() || null,
+      };
+    } catch {
+      return {
+        totalArticles: 0,
+        totalSize: 0,
+        oldestEntry: null,
+        newestEntry: null,
+      };
+    }
+  }
+
+  async isAvailable(): Promise<boolean> {
+    // Wikipedia API is always available (public)
+    return true;
+  }
+}
+
+// ============================================================================
 // TOOL REGISTRY - Auto-Registration
 // ============================================================================
 
@@ -902,5 +1310,6 @@ export function createDefaultTools(config: {
     new CodeExecutionTool(config.sandboxRoot),
     new OllamaInfoTool(),
     new SearchTool(config.braveApiKey, config.openRouterApiKey),
+    new WikipediaTool(config.workspaceRoot),
   ];
 }
