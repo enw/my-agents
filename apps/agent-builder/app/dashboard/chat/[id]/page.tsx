@@ -7,6 +7,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import TraceViewer from '../../../components/TraceViewer';
 import ThemeToggle from '../../../components/ThemeToggle';
+import CommandAutocomplete from './CommandAutocomplete';
+import { getAllCommands, CommandDefinition, CommandContext } from './commands';
+import { parseCommand, filterCommands, completeCommandName } from './commandParser';
+import { executeCommand, CommandStateSetters } from './commandExecutor';
 
 interface Agent {
   id: string;
@@ -57,6 +61,16 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const assistantMessageIndexRef = useRef<number>(-1);
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
+  const activeRunRef = useRef<HTMLDivElement>(null);
+  
+  // Command autocomplete state
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+  const [filteredCommands, setFilteredCommands] = useState<CommandDefinition[]>([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const [temperature, setTemperature] = useState<number | null>(null);
+  const [maxTokens, setMaxTokens] = useState<number | null>(null);
 
   useEffect(() => {
     // Reset state when agent changes (starting fresh)
@@ -103,6 +117,14 @@ export default function ChatPage() {
       document.body.style.userSelect = '';
     };
   }, [isResizing]);
+
+  // Scroll to active conversation when currentRunIndex changes
+  useEffect(() => {
+    if (currentRunIndex >= 0 && continueRunPaneOpen) {
+      scrollToActiveConversation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRunIndex, continueRunPaneOpen]);
 
   // Don't auto-load messages - start fresh by default
   // Messages are only loaded when:
@@ -188,21 +210,44 @@ export default function ChatPage() {
     }
   }
 
+  // Scroll to active conversation in sidebar
+  function scrollToActiveConversation() {
+    if (activeRunRef.current && sidebarScrollRef.current) {
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        if (activeRunRef.current && sidebarScrollRef.current) {
+          const container = sidebarScrollRef.current;
+          const activeElement = activeRunRef.current;
+          
+          // Scroll so the active element is at the top (accounting for padding)
+          const scrollTop = activeElement.offsetTop - container.offsetTop - 16; // 16px for padding
+          container.scrollTo({
+            top: Math.max(0, scrollTop),
+            behavior: 'smooth',
+          });
+        }
+      }, 100);
+    }
+  }
+
   function goToPreviousRun() {
     if (currentRunIndex > 0) {
       loadRunByIndex(currentRunIndex - 1);
+      scrollToActiveConversation();
     }
   }
 
   function goToNextRun() {
     if (currentRunIndex < allRuns.length - 1) {
       loadRunByIndex(currentRunIndex + 1);
+      scrollToActiveConversation();
     }
   }
 
   function goToLatestRun() {
     if (allRuns.length > 0) {
       loadRunByIndex(0);
+      scrollToActiveConversation();
     }
   }
 
@@ -394,10 +439,176 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queuedMessages.length]);
 
+  // Command context for autocomplete
+  const getCommandContext = (): CommandContext => ({
+    models,
+    runs: allRuns,
+    agent,
+    currentModel: selectedModel,
+    showTrace,
+    allRuns,
+    currentRunIndex,
+  });
+
+  // Handle input changes for autocomplete
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const newValue = e.target.value;
+    const newCursorPos = e.target.selectionStart || 0;
+    
+    setInput(newValue);
+    setCursorPosition(newCursorPos);
+    
+    const parsed = parseCommand(newValue, newCursorPos);
+    
+    if (parsed.isCommand && parsed.query !== '') {
+      const allCommands = getAllCommands();
+      const filtered = filterCommands(allCommands, parsed.query);
+      setFilteredCommands(filtered);
+      setShowAutocomplete(filtered.length > 0);
+      setSelectedCommandIndex(0);
+    } else if (parsed.isCommand && newValue === '/') {
+      // Show all commands when just "/" is typed
+      setFilteredCommands(getAllCommands());
+      setShowAutocomplete(true);
+      setSelectedCommandIndex(0);
+    } else {
+      setShowAutocomplete(false);
+    }
+  }
+
+  // Handle keyboard navigation in autocomplete
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showAutocomplete && filteredCommands.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedCommandIndex((prev) => 
+            prev < filteredCommands.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedCommandIndex((prev) => 
+            prev > 0 ? prev - 1 : filteredCommands.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (filteredCommands[selectedCommandIndex]) {
+            handleCommandSelect(filteredCommands[selectedCommandIndex]);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setShowAutocomplete(false);
+          break;
+        case 'Tab':
+          e.preventDefault();
+          const completed = completeCommandName(input);
+          if (completed) {
+            setInput(completed + ' ');
+            setShowAutocomplete(false);
+          }
+          break;
+        default:
+          // Let other keys through
+          break;
+      }
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  // Handle command selection
+  async function handleCommandSelect(command: CommandDefinition, suggestion?: string) {
+    const parsed = parseCommand(input);
+    let args = parsed.args;
+    
+    // If a suggestion was provided, use it as the first arg and update input
+    if (suggestion) {
+      args = [suggestion];
+      // Update input to show the selected suggestion
+      setInput(`/${parsed.command} ${suggestion} `);
+    }
+    
+    // Validate required args
+    if (command.requiresArgs && args.length === 0) {
+      setError(`Usage: ${command.usage || `/${command.name} <${command.argDescription || 'value'}>`}`);
+      setShowAutocomplete(true);
+      return;
+    }
+    
+    const context = getCommandContext();
+    const setters: CommandStateSetters = {
+      setMessages,
+      setInput,
+      setError,
+      setShowTrace,
+      setSelectedModel,
+      setCurrentRunIndex,
+      setRunToContinue,
+      startNewChat,
+      goToPreviousRun,
+      goToNextRun,
+      goToLatestRun,
+      loadConversation,
+      setTemperature,
+      setMaxTokens,
+    };
+
+    try {
+      const result = await executeCommand(command, args, context, setters);
+      
+      if (result.success) {
+        if (result.shouldSaveToHistory && result.transformedMessage) {
+          // For semantic commands, send the transformed message
+          setInput(result.transformedMessage);
+          // Trigger send after a brief delay to allow state to update
+          setTimeout(() => {
+            handleSend();
+          }, 0);
+        } else if (result.clearInput) {
+          setInput('');
+        }
+        setShowAutocomplete(false);
+        setError(null);
+      } else {
+        setError(result.error || 'Command execution failed');
+        // Keep autocomplete open for config errors so user can fix
+        if (command.category === 'config' || command.requiresArgs) {
+          setShowAutocomplete(true);
+        }
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Command execution failed');
+      setShowAutocomplete(false);
+    }
+  }
+
   async function handleSend() {
     if (!input.trim()) return;
 
     const messageToSend = input.trim();
+    
+    // Check if it's a command first
+    const parsed = parseCommand(messageToSend);
+    if (parsed.isCommand) {
+      const command = getAllCommands().find(
+        (cmd) => cmd.name === parsed.command || cmd.aliases?.includes(parsed.command)
+      );
+      
+      if (command) {
+        await handleCommandSelect(command);
+        return;
+      } else {
+        // Unknown command - show error but don't send
+        setError(`Unknown command: /${parsed.command}. Type /help for available commands.`);
+        setInput('');
+        return;
+      }
+    }
+
     setInput('');
     setError(null);
     
@@ -479,15 +690,25 @@ export default function ChatPage() {
       }
 
       // Create new run with streaming
+      const requestBody: any = {
+        agentId,
+        message: messageToSend,
+        stream: true,
+        modelOverride: selectedModel && selectedModel !== agent?.defaultModel ? selectedModel : undefined,
+      };
+      
+      // Add temperature and maxTokens if set via commands
+      if (temperature !== null) {
+        requestBody.temperature = temperature;
+      }
+      if (maxTokens !== null) {
+        requestBody.maxTokens = maxTokens;
+      }
+      
       const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId,
-          message: messageToSend,
-          stream: true,
-          modelOverride: selectedModel && selectedModel !== agent?.defaultModel ? selectedModel : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -693,7 +914,10 @@ export default function ChatPage() {
               </svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div 
+            ref={sidebarScrollRef}
+            className="flex-1 overflow-y-auto p-4"
+          >
             <button
               onClick={startNewChat}
               className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center justify-center gap-2"
@@ -703,40 +927,64 @@ export default function ChatPage() {
               </svg>
               New Chat
             </button>
-            {previousRuns.length === 0 ? (
+            {allRuns.length === 0 ? (
               <p className="text-gray-600 dark:text-gray-400 text-center py-8">
                 No previous conversations found
               </p>
             ) : (
               <div className="space-y-2">
-                {previousRuns.map((run) => (
-                  <div
-                    key={run.id}
-                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition"
-                    onClick={() => {
-                      loadConversation(run.id);
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white text-sm">
-                          {new Date(run.createdAt).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                          {run.turns?.length || 0} turns • {run.totalTokens.totalTokens} tokens
-                        </p>
+                {allRuns.map((run, index) => {
+                  const isActive = currentRunIndex === index;
+                  return (
+                    <div
+                      key={run.id}
+                      ref={isActive ? activeRunRef : null}
+                      className={`p-4 border rounded-lg cursor-pointer transition ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400 shadow-md'
+                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                      onClick={() => {
+                        loadConversation(run.id);
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className={`font-medium text-sm ${
+                            isActive
+                              ? 'text-blue-900 dark:text-blue-100'
+                              : 'text-gray-900 dark:text-white'
+                          }`}>
+                            {new Date(run.createdAt).toLocaleString()}
+                          </p>
+                          <p className={`text-xs ${
+                            isActive
+                              ? 'text-blue-700 dark:text-blue-300'
+                              : 'text-gray-600 dark:text-gray-400'
+                          }`}>
+                            {run.turns?.length || 0} turns • {run.totalTokens?.totalTokens || 0} tokens
+                          </p>
+                        </div>
+                        <span className={`text-xs ${
+                          isActive
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {run.modelUsed}
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {run.modelUsed}
-                      </span>
+                      {run.turns && run.turns.length > 0 && (
+                        <p className={`text-sm truncate ${
+                          isActive
+                            ? 'text-blue-800 dark:text-blue-200'
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`}>
+                          {run.turns[run.turns.length - 1].userMessage}
+                        </p>
+                      )}
                     </div>
-                    {run.turns && run.turns.length > 0 && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                        {run.turns[run.turns.length - 1].userMessage}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1110,29 +1358,38 @@ export default function ChatPage() {
                 {error}
               </div>
             )}
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                onKeyPress={(e) => {
-                  // Prevent default Enter behavior to keep focus
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="Type your message..."
-                disabled={false}
-                autoFocus
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
+            <div className="flex gap-2 relative">
+              <div className="flex-1 relative">
+                {showAutocomplete && filteredCommands.length > 0 && (
+                  <CommandAutocomplete
+                    input={input}
+                    cursorPosition={cursorPosition}
+                    commands={filteredCommands}
+                    selectedIndex={selectedCommandIndex}
+                    onSelect={handleCommandSelect}
+                    onClose={() => setShowAutocomplete(false)}
+                    context={getCommandContext()}
+                    inputRef={inputRef}
+                  />
+                )}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  onKeyPress={(e) => {
+                    // Prevent default Enter behavior to keep focus
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                    }
+                  }}
+                  placeholder={showAutocomplete ? "Select a command or continue typing..." : "Type your message... (use / for commands)"}
+                  disabled={false}
+                  autoFocus
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
               <button
                 onClick={handleSend}
                 disabled={!input.trim()}
