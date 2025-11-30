@@ -18,3 +18,10 @@ export type {
   ToolWithStatus,
 } from './services';
 
+// Export versioning utilities
+export {
+  generateMemoryHash,
+  generateAgentVersion,
+  parseAgentVersion,
+} from './services/versioning';
+

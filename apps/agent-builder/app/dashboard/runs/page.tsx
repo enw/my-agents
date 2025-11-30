@@ -17,6 +17,7 @@ interface Run {
     totalTokens: number;
   };
   totalToolCalls: number;
+  agentVersion?: string;
   createdAt: Date | string;
   completedAt?: Date | string;
   error?: string;
@@ -431,6 +432,9 @@ export default function RunsPage() {
                   Created <SortIcon field="created" />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -478,6 +482,13 @@ export default function RunsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                     {formatDate(run.createdAt)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                    {run.agentVersion ? (
+                      <span className="font-mono text-xs">{run.agentVersion}</span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex gap-3">

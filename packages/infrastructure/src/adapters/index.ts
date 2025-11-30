@@ -1464,9 +1464,12 @@ export class DefaultModelRegistry implements ModelRegistryPort {
 export class SqliteTraceRepository implements TracePort {
   constructor(private db: any) {} // Drizzle DB instance
 
-  async createRun(data: { agentId: string; modelUsed: string; modelSettings?: any }): Promise<Run> {
+  async createRun(data: { agentId: string; modelUsed: string; modelSettings?: any; promptVersion?: number }): Promise<Run> {
     const id = crypto.randomUUID();
     const now = new Date();
+    
+    // Get prompt version if not provided
+    const promptVersion = data.promptVersion ?? await this.getCurrentPromptVersion(data.agentId);
 
     const dbRow = {
       id,
@@ -1479,6 +1482,10 @@ export class SqliteTraceRepository implements TracePort {
       totalToolCalls: 0,
       totalDurationMs: null,
       modelSettings: data.modelSettings ? JSON.stringify(data.modelSettings) : null,
+      promptVersion,
+      memoryNumber: 0, // Start at 0
+      memoryHash: null,
+      agentVersion: null,
       createdAt: now,
       completedAt: null,
       error: null,
@@ -1496,6 +1503,10 @@ export class SqliteTraceRepository implements TracePort {
       totalToolCalls: 0,
       totalDurationMs: undefined,
       modelSettings: data.modelSettings,
+      promptVersion,
+      memoryNumber: 0,
+      memoryHash: undefined,
+      agentVersion: undefined,
       createdAt: now,
     };
   }
@@ -1671,6 +1682,70 @@ export class SqliteTraceRepository implements TracePort {
     await this.db.update(runs).set(updateData).where(eq(runs.id, runId));
   }
 
+  async getCurrentPromptVersion(agentId: string): Promise<number> {
+    // Get the latest prompt version for this agent
+    const latestVersion = await this.db
+      .select({ max: sql<number>`COALESCE(MAX(${promptVersions.version}), 0)` })
+      .from(promptVersions)
+      .where(eq(promptVersions.agentId, agentId))
+      .get();
+
+    // Get the agent to check current systemPrompt
+    const agent = await this.db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .get();
+
+    if (!agent) {
+      return 1; // Default to version 1
+    }
+
+    // Find the version that matches the current systemPrompt
+    const matchingVersion = await this.db
+      .select()
+      .from(promptVersions)
+      .where(
+        and(
+          eq(promptVersions.agentId, agentId),
+          eq(promptVersions.systemPrompt, agent.systemPrompt)
+        )
+      )
+      .orderBy(desc(promptVersions.version))
+      .limit(1)
+      .get();
+
+    if (matchingVersion) {
+      return matchingVersion.version;
+    }
+
+    // If no matching version found, return the latest version or 1
+    return latestVersion?.max ?? 1;
+  }
+
+  async updateAgentVersion(
+    runId: string,
+    memoryNumber: number,
+    memoryHash: string
+  ): Promise<void> {
+    const run = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
+    if (!run) {
+      throw new Error(`Run ${runId} not found`);
+    }
+
+    // Generate version string: VERSION.memnum.MEMORYHASH
+    const agentVersion = `${run.promptVersion}.${memoryNumber}.${memoryHash}`;
+
+    await this.db
+      .update(runs)
+      .set({
+        memoryNumber,
+        memoryHash,
+        agentVersion,
+      })
+      .where(eq(runs.id, runId));
+  }
+
   async getRun(runId: string): Promise<Run | null> {
     const runRow = await this.db.select().from(runs).where(eq(runs.id, runId)).get();
     if (!runRow) {
@@ -1744,6 +1819,10 @@ export class SqliteTraceRepository implements TracePort {
       totalToolCalls: runRow.totalToolCalls,
       totalDurationMs: runRow.totalDurationMs || undefined,
       modelSettings: runRow.modelSettings ? JSON.parse(runRow.modelSettings) : undefined,
+      promptVersion: runRow.promptVersion,
+      memoryNumber: runRow.memoryNumber,
+      memoryHash: runRow.memoryHash ?? undefined,
+      agentVersion: runRow.agentVersion ?? undefined,
       createdAt: runRow.createdAt,
       completedAt: runRow.completedAt || undefined,
       error: runRow.error || undefined,

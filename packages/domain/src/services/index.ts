@@ -69,6 +69,8 @@ export interface ExecutionOptions {
   conversationHistory?: Message[]; // For continuing conversations
 }
 
+import { generateMemoryHash, generateAgentVersion } from './versioning';
+
 /**
  * Implementation of agent execution logic
  */
@@ -118,16 +120,21 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
     }
     console.log(`[AGENT EXECUTION] Model info loaded: ${modelInfo.displayName || modelInfo.id}`);
 
-    // 3. Create run trace
+    // 3. Create run trace with prompt version
     console.log(`[AGENT EXECUTION] Creating run trace...`);
     // Get model settings from agent or options
     const modelSettings = options.settings || agent.settings || undefined;
+    
+    // Get current prompt version for this agent
+    const promptVersion = await this.tracePort.getCurrentPromptVersion(agent.id);
+    
     const run = await this.tracePort.createRun({
       agentId: agent.id,
       modelUsed: modelId,
       modelSettings,
+      promptVersion,
     });
-    console.log(`[AGENT EXECUTION] Run created with ID: ${run.id}`);
+    console.log(`[AGENT EXECUTION] Run created with ID: ${run.id}, prompt version: ${promptVersion}`);
 
     // If streaming, send runId to client
     if (options.streamSessionId) {
@@ -271,6 +278,7 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
 
     let turnNumber = conversationHistory.length / 2 + 1; // Approximate
     let continueLoop = true;
+    let memoryNumber = 0; // Start at 0, will increment for each message/tool call
 
     console.log(`[AGENT LOOP] Starting loop with turnNumber: ${turnNumber}, maxTurns: ${maxTurns}`);
 
@@ -280,6 +288,10 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
         runId,
         timestamp: turnStartTime.toISOString(),
       });
+      
+      // Increment memory number for this message
+      memoryNumber++;
+      console.log(`[AGENT LOOP] Memory number: ${memoryNumber}`);
       
       // Call LLM
       console.log(`[AGENT LOOP] Preparing LLM request...`, {
@@ -325,6 +337,10 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       if (response.toolCalls.length > 0) {
         console.log(`[AGENT LOOP] Executing ${response.toolCalls.length} tool call(s)...`);
         for (const toolCall of response.toolCalls) {
+          // Increment memory number for each tool call
+          memoryNumber++;
+          console.log(`[AGENT LOOP] Memory number (tool call): ${memoryNumber}`);
+          
           console.log(`[AGENT LOOP] Executing tool: ${toolCall.name}`, {
             toolCallId: toolCall.id,
             parameters: JSON.stringify(toolCall.parameters),
@@ -392,10 +408,27 @@ export class DefaultAgentExecutionService implements AgentExecutionService {
       // Log turn
       const turnEndTime = new Date();
       const turnDurationMs = turnEndTime.getTime() - turnStartTime.getTime();
+      
+      // Generate memory hash from last turn's input + output
+      const userMsg = turnNumber === 1 ? userMessage : '[Tool results]';
+      const memoryHash = await generateMemoryHash(userMsg, response.content);
+      
+      // Update agent version
+      const run = await this.tracePort.getRun(runId);
+      if (run) {
+        await this.tracePort.updateAgentVersion(runId, memoryNumber, memoryHash);
+        const agentVersion = generateAgentVersion(
+          run.promptVersion,
+          memoryNumber,
+          memoryHash
+        );
+        console.log(`[AGENT LOOP] Agent version updated: ${agentVersion}`);
+      }
+      
       console.log(`[AGENT LOOP] Logging turn ${turnNumber} to trace...`);
       const turn: Turn = {
         turnNumber,
-        userMessage: turnNumber === 1 ? userMessage : '[Tool results]',
+        userMessage: userMsg,
         assistantMessage: response.content,
         toolExecutions,
         usage: response.usage,

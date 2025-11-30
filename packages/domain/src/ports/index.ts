@@ -360,6 +360,20 @@ export interface TracePort {
    * Calculate estimated cost for a run
    */
   calculateRunCost(runId: string): Promise<number | null>;
+
+  /**
+   * Get current prompt version for an agent
+   */
+  getCurrentPromptVersion(agentId: string): Promise<number>;
+
+  /**
+   * Update agent version after processing a message/tool call
+   */
+  updateAgentVersion(
+    runId: string,
+    memoryNumber: number,
+    memoryHash: string
+  ): Promise<void>;
 }
 
 export interface Run {
@@ -372,6 +386,11 @@ export interface Run {
   totalToolCalls: number;
   totalDurationMs?: number; // Total execution duration in milliseconds
   modelSettings?: ModelSettings; // Model settings used for this run
+  // Versioning fields
+  promptVersion: number; // Version of prompt used
+  memoryNumber: number; // Monotonically increasing memnum
+  memoryHash?: string; // Hash of memory contents
+  agentVersion?: string; // Full version string: "VERSION.memnum.MEMORYHASH"
   createdAt: Date;
   completedAt?: Date;
   error?: string;
@@ -383,6 +402,7 @@ export interface CreateRunData {
   agentId: string;
   modelUsed: string;
   modelSettings?: ModelSettings; // Optional model settings
+  promptVersion?: number; // Optional prompt version (will be fetched if not provided)
 }
 
 export interface Turn {

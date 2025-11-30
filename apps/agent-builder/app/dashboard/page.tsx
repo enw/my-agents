@@ -16,6 +16,8 @@ interface Agent {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  latestVersion?: string; // Latest agent version from most recent run
+  promptVersion?: number; // Current prompt version
 }
 
 export default function Dashboard() {
@@ -35,8 +37,38 @@ export default function Dashboard() {
       if (!response.ok) {
         throw new Error('Failed to load agents');
       }
-      const data = await response.json();
-      setAgents(data);
+      const agentsData = await response.json();
+      
+      // Fetch latest version for each agent
+      const agentsWithVersions = await Promise.all(
+        agentsData.map(async (agent: Agent) => {
+          try {
+            // Get latest run for this agent
+            const runsResponse = await fetch(`/api/runs?agentId=${agent.id}&limit=1`);
+            if (runsResponse.ok) {
+              const runs = await runsResponse.json();
+              if (runs.length > 0 && runs[0].agentVersion) {
+                return { ...agent, latestVersion: runs[0].agentVersion };
+              }
+            }
+            
+            // Get prompt versions to show current prompt version
+            const versionsResponse = await fetch(`/api/agents/${agent.id}/versions`);
+            if (versionsResponse.ok) {
+              const versions = await versionsResponse.json();
+              if (versions.length > 0) {
+                const latestPromptVersion = versions[0].version;
+                return { ...agent, promptVersion: latestPromptVersion };
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load version for agent ${agent.id}:`, err);
+          }
+          return agent;
+        })
+      );
+      
+      setAgents(agentsWithVersions);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load agents');
     } finally {
@@ -150,6 +182,19 @@ export default function Dashboard() {
               <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div>Model: {agent.defaultModel}</div>
                 <div>Tools: {agent.allowedTools.length}</div>
+                {agent.latestVersion && (
+                  <div className="pt-1">
+                    <span className="text-gray-400 dark:text-gray-500">Version: </span>
+                    <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
+                      {agent.latestVersion}
+                    </span>
+                  </div>
+                )}
+                {!agent.latestVersion && agent.promptVersion && (
+                  <div className="pt-1">
+                    <span className="text-gray-400 dark:text-gray-500">Prompt v{agent.promptVersion}</span>
+                  </div>
+                )}
               </div>
             </AnimatedCard>
           ))}

@@ -124,6 +124,14 @@ export default function RunDetailPage() {
                     {run.modelUsed}
                   </span>
                 </div>
+                {run.agentVersion && (
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Version:</span>
+                    <span className="ml-2 text-gray-900 dark:text-white font-mono text-xs">
+                      {run.agentVersion}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600 dark:text-gray-400">Created:</span>
                   <span className="ml-2 text-gray-900 dark:text-white">

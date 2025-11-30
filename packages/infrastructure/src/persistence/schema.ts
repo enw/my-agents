@@ -47,6 +47,11 @@ export const runs = sqliteTable('runs', {
   totalToolCalls: integer('total_tool_calls').notNull().default(0),
   totalDurationMs: integer('total_duration_ms'), // Total execution duration in milliseconds
   modelSettings: text('model_settings'), // JSON object: {temperature, maxTokens, topP}
+  // Versioning fields
+  promptVersion: integer('prompt_version').notNull().default(1), // Version of prompt used
+  memoryNumber: integer('memory_number').notNull().default(0), // Monotonically increasing memnum
+  memoryHash: text('memory_hash'), // Hash of memory contents
+  agentVersion: text('agent_version'), // Full version string: "VERSION.memnum.MEMORYHASH"
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
   error: text('error'),
