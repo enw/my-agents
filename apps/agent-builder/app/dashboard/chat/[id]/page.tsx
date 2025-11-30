@@ -52,11 +52,20 @@ export default function ChatPage() {
   const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
   const [traceWidth, setTraceWidth] = useState<number>(320); // Default width in pixels (w-80 = 320px)
   const [isResizing, setIsResizing] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
+  const [runToContinue, setRunToContinue] = useState<string | null>(null); // Track which run we're continuing
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const assistantMessageIndexRef = useRef<number>(-1);
 
   useEffect(() => {
+    // Reset state when agent changes (starting fresh)
+    setMessages([]);
+    setCurrentRun(null);
+    setRunToContinue(null);
+    setCurrentRunIndex(-1);
+    setError(null);
+    
     loadAgent();
     loadModels();
     loadPreviousRuns();
@@ -95,16 +104,11 @@ export default function ChatPage() {
     };
   }, [isResizing]);
 
-  // Load messages from the most recent run when agent loads
-  useEffect(() => {
-    if (agent && allRuns.length > 0 && currentRunIndex === -1) {
-      loadRunByIndex(0); // Load the latest run
-    } else if (agent && messages.length === 0 && allRuns.length === 0) {
-      // Fallback if runs haven't loaded yet
-      loadLatestRunMessages();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, allRuns]);
+  // Don't auto-load messages - start fresh by default
+  // Messages are only loaded when:
+  // 1. User explicitly clicks "Continue Run" and selects a conversation
+  // 2. User navigates using Prev/Next buttons
+  // This ensures clicking "Chat with agent" always starts a new thread
 
   async function loadLatestRunMessages() {
     try {
@@ -233,34 +237,24 @@ export default function ChatPage() {
     }
   }
 
-  async function continueRun(runId: string, message: string) {
+  async function loadConversation(runId: string) {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/run/continue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          runId,
-          message,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to continue conversation');
+      // Fetch the run to load its conversation
+      const runResponse = await fetch(`/api/runs/${runId}`);
+      if (!runResponse.ok) {
+        throw new Error('Failed to load conversation');
       }
 
-      const data = await response.json();
+      const run = await runResponse.json();
+      setCurrentRun(run);
+      setRunToContinue(runId); // Set this as the run to continue
 
-      // Fetch updated run
-      const runResponse = await fetch(`/api/runs/${runId}`);
-      if (runResponse.ok) {
-        const run = await runResponse.json();
-        setCurrentRun(run);
-
-        // Update messages from the run
-        const newMessages: Message[] = [];
+      // Update messages from the run
+      const newMessages: Message[] = [];
+      if (run.turns && run.turns.length > 0) {
         run.turns.forEach((turn: any) => {
           newMessages.push({
             role: 'user',
@@ -269,16 +263,23 @@ export default function ChatPage() {
           });
           newMessages.push({
             role: 'assistant',
-            content: turn.assistantMessage,
+            content: turn.assistantMessage || '',
             timestamp: new Date(turn.timestamp),
           });
         });
-        setMessages(newMessages);
+      }
+      setMessages(newMessages);
+
+      // Find the run index in allRuns
+      const runIndex = allRuns.findIndex((r: any) => r.id === runId);
+      if (runIndex >= 0) {
+        setCurrentRunIndex(runIndex);
       }
 
       setShowRunSelector(false);
+      scrollToBottom();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to continue conversation');
+      setError(err instanceof Error ? err.message : 'Failed to load conversation');
     } finally {
       setLoading(false);
     }
@@ -391,8 +392,11 @@ export default function ChatPage() {
     // Keep focus on input after clearing
     setTimeout(() => inputRef.current?.focus(), 50);
     
-    // Reset to latest conversation when sending new message
-    setCurrentRunIndex(-1);
+    // Reset to latest conversation when sending new message (unless continuing)
+    if (!runToContinue) {
+      setCurrentRunIndex(-1);
+      setRunToContinue(null); // Clear any previous continuation
+    }
 
     // Add to queue
     const queueId = addToQueue(messageToSend);
@@ -416,7 +420,53 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      // Try streaming first
+      // Check if we're continuing a conversation
+      if (runToContinue) {
+        // Continue existing conversation (non-streaming for now)
+        const response = await fetch('/api/run/continue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            runId: runToContinue,
+            message: messageToSend,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to continue conversation');
+        }
+
+        // Fetch updated run to get the new turn
+        const runResponse = await fetch(`/api/runs/${runToContinue}`);
+        if (runResponse.ok) {
+          const run = await runResponse.json();
+          setCurrentRun(run);
+
+          // Update messages from the run (include the new turn)
+          const newMessages: Message[] = [];
+          if (run.turns && run.turns.length > 0) {
+            run.turns.forEach((turn: any) => {
+              newMessages.push({
+                role: 'user',
+                content: turn.userMessage,
+                timestamp: new Date(turn.timestamp),
+              });
+              newMessages.push({
+                role: 'assistant',
+                content: turn.assistantMessage || '',
+                timestamp: new Date(turn.timestamp),
+              });
+            });
+          }
+          setMessages(newMessages);
+          scrollToBottom();
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // Create new run with streaming
       const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -493,6 +543,7 @@ export default function ChatPage() {
                     // Run created, fetch details
                     if (chunk.runId) {
                       setCurrentRun(null); // Clear previous run
+                      setRunToContinue(null); // Clear continuation when new run is created
                       fetchRunDetails(chunk.runId);
                     }
                   } else if (chunk.type === 'tool_call') {
@@ -585,6 +636,16 @@ export default function ChatPage() {
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
+
+  const handleCopyMessage = async (content: string, messageIndex: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageIndex);
+      setTimeout(() => setCopiedMessageId(null), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   if (!agent) {
     return (
@@ -730,15 +791,35 @@ export default function ChatPage() {
                 key={idx}
                 className={`flex ${
                   message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+                } group`}
               >
                 <div
-                  className={`max-w-3xl rounded-lg px-4 py-2 ${
+                  className={`relative max-w-3xl rounded-lg px-4 py-2 ${
                     message.role === 'user'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
                   }`}
                 >
+                  {/* Copy button - appears on hover */}
+                  <button
+                    onClick={() => handleCopyMessage(message.content, idx)}
+                    className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                      message.role === 'user'
+                        ? 'hover:bg-blue-700 text-blue-100'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    }`}
+                    title="Copy to clipboard"
+                  >
+                    {copiedMessageId === idx ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     className={`prose dark:prose-invert max-w-none prose-sm 
@@ -998,10 +1079,7 @@ export default function ChatPage() {
                       key={run.id}
                       className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                       onClick={() => {
-                        const lastTurn = run.turns?.[run.turns.length - 1];
-                        if (lastTurn) {
-                          continueRun(run.id, '');
-                        }
+                        loadConversation(run.id);
                       }}
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -1019,7 +1097,7 @@ export default function ChatPage() {
                       </div>
                       {run.turns && run.turns.length > 0 && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                          {run.turns[0].userMessage}
+                          {run.turns[run.turns.length - 1].userMessage}
                         </p>
                       )}
                     </div>
