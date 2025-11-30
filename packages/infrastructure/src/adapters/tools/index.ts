@@ -691,41 +691,119 @@ export class SearchTool implements Tool {
     required: ['query'],
   };
 
+  private braveApiKey?: string;
   private openRouterApiKey?: string;
 
-  constructor(openRouterApiKey?: string) {
+  constructor(braveApiKey?: string, openRouterApiKey?: string) {
+    this.braveApiKey = braveApiKey;
     this.openRouterApiKey = openRouterApiKey;
   }
 
   async execute(parameters: Record<string, unknown>): Promise<ToolResult> {
     const query = parameters.query as string;
-    const numResults = (parameters.numResults as number) || 5;
+    const numResults = Math.min(Math.max((parameters.numResults as number) || 5, 1), 10);
+
+    const startTime = Date.now();
 
     try {
-      // Use OpenRouter search if API key is available
-      if (this.openRouterApiKey) {
-        return await this.searchWithOpenRouter(query, numResults);
+      // Priority: Brave Search > DuckDuckGo (fallback)
+      if (this.braveApiKey) {
+        return await this.searchWithBrave(query, numResults, startTime);
       }
 
       // Fallback: Use DuckDuckGo instant answer API (no key required)
-      return await this.searchWithDuckDuckGo(query, numResults);
+      return await this.searchWithDuckDuckGo(query, numResults, startTime);
     } catch (error: any) {
       return {
         success: false,
         output: `Search failed: ${error.message}`,
         error: error.message,
-        executionTimeMs: 0,
+        executionTimeMs: Date.now() - startTime,
       };
+    }
+  }
+
+  private async searchWithBrave(
+    query: string,
+    numResults: number,
+    startTime: number
+  ): Promise<ToolResult> {
+    try {
+      // Brave Search API endpoint
+      const url = new URL('https://api.search.brave.com/res/v1/web/search');
+      url.searchParams.set('q', query);
+      url.searchParams.set('count', numResults.toString());
+      url.searchParams.set('search_lang', 'en');
+      url.searchParams.set('country', 'US');
+      url.searchParams.set('safesearch', 'moderate');
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': this.braveApiKey!,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Brave Search API returned ${response.status}: ${errorText || response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      // Format results from Brave Search API
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+
+      if (data.web?.results) {
+        for (const result of data.web.results.slice(0, numResults)) {
+          results.push({
+            title: result.title || 'Untitled',
+            url: result.url || '',
+            snippet: result.description || result.snippet || '',
+          });
+        }
+      }
+
+      if (results.length === 0) {
+        return {
+          success: true,
+          output: `No results found for "${query}"`,
+          data: { query, results: [], provider: 'brave' },
+          executionTimeMs: Date.now() - startTime,
+        };
+      }
+
+      const output = results
+        .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`)
+        .join('\n\n');
+
+      return {
+        success: true,
+        output: `Found ${results.length} results for "${query}":\n\n${output}`,
+        data: { query, results, provider: 'brave' },
+        executionTimeMs: Date.now() - startTime,
+      };
+    } catch (error: any) {
+      // If Brave Search fails, fall back to DuckDuckGo
+      console.warn('Brave Search failed, falling back to DuckDuckGo:', error.message);
+      return await this.searchWithDuckDuckGo(query, numResults, startTime);
     }
   }
 
   private async searchWithOpenRouter(query: string, numResults: number): Promise<ToolResult> {
     // OpenRouter doesn't have a direct search API, so we'll use DuckDuckGo
     // In a real implementation, you might use Brave Search API or similar
-    return await this.searchWithDuckDuckGo(query, numResults);
+    return await this.searchWithDuckDuckGo(query, numResults, Date.now());
   }
 
-  private async searchWithDuckDuckGo(query: string, numResults: number): Promise<ToolResult> {
+  private async searchWithDuckDuckGo(
+    query: string,
+    numResults: number,
+    startTime: number
+  ): Promise<ToolResult> {
     try {
       // DuckDuckGo Instant Answer API (no key required, but limited)
       const response = await fetch(
@@ -772,8 +850,8 @@ export class SearchTool implements Tool {
         return {
           success: true,
           output: `No results found for "${query}"`,
-          data: { query, results: [] },
-          executionTimeMs: 0,
+          data: { query, results: [], provider: 'duckduckgo' },
+          executionTimeMs: Date.now() - startTime,
         };
       }
 
@@ -784,8 +862,8 @@ export class SearchTool implements Tool {
       return {
         success: true,
         output: `Found ${results.length} results for "${query}":\n\n${output}`,
-        data: { query, results },
-        executionTimeMs: 0,
+        data: { query, results, provider: 'duckduckgo' },
+        executionTimeMs: Date.now() - startTime,
       };
     } catch (error: any) {
       // Fallback: return a message that search is not available
@@ -793,7 +871,7 @@ export class SearchTool implements Tool {
         success: false,
         output: `Web search is currently unavailable. Error: ${error.message}`,
         error: error.message,
-        executionTimeMs: 0,
+        executionTimeMs: Date.now() - startTime,
       };
     }
   }
@@ -814,6 +892,7 @@ export class SearchTool implements Tool {
 export function createDefaultTools(config: {
   sandboxRoot: string;
   workspaceRoot: string;
+  braveApiKey?: string;
   openRouterApiKey?: string;
 }): Tool[] {
   return [
@@ -822,6 +901,6 @@ export function createDefaultTools(config: {
     new HttpTool(),
     new CodeExecutionTool(config.sandboxRoot),
     new OllamaInfoTool(),
-    new SearchTool(config.openRouterApiKey),
+    new SearchTool(config.braveApiKey, config.openRouterApiKey),
   ];
 }

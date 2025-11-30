@@ -52,6 +52,7 @@ export interface AppConfig {
   workspaceRoot: string;
 
   // API Keys (optional - from .env.local)
+  braveApiKey?: string;
   openRouterApiKey?: string;
   openAiApiKey?: string;
   anthropicApiKey?: string;
@@ -70,6 +71,7 @@ export function loadConfig(): AppConfig {
     dbPath: process.env.DATABASE_URL || path.join(rootDir, 'data', 'agents.db'),
     sandboxRoot: process.env.SANDBOX_ROOT || path.join(rootDir, '.sandbox'),
     workspaceRoot: process.env.WORKSPACE_ROOT || path.join(rootDir, 'workspace'),
+    braveApiKey: process.env.BRAVE_API_KEY,
     openRouterApiKey: process.env.OPENROUTER_API_KEY,
     openAiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
@@ -286,12 +288,20 @@ async function registerTools(container: DependencyContainer, config: AppConfig) 
   const tools = createDefaultTools({
     sandboxRoot: config.sandboxRoot,
     workspaceRoot: config.workspaceRoot,
+    braveApiKey: config.braveApiKey,
     openRouterApiKey: config.openRouterApiKey,
   });
 
   await container.toolRegistryService.registerAllTools(tools);
 
   console.log(`Registered ${tools.length} tools:`, tools.map((t) => t.name).join(', '));
+
+  // Log search provider status
+  if (config.braveApiKey) {
+    console.log('🔍 Web search: Brave Search API enabled');
+  } else {
+    console.log('🔍 Web search: DuckDuckGo (fallback, no API key required)');
+  }
 
   // Check tool availability
   const availableTools = await container.toolRegistryService.getAvailableTools();

@@ -100,6 +100,9 @@ OPENROUTER_API_KEY=sk-or-v1-...
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
+# Web Search API Key (optional but recommended)
+BRAVE_API_KEY=BSA_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
 # Database
 DATABASE_PATH=./data/agents.db
 
@@ -109,6 +112,8 @@ WORKSPACE_DIR=./workspace
 # Ollama (optional)
 OLLAMA_BASE_URL=http://localhost:11434
 ```
+
+**Note**: The `BRAVE_API_KEY` enables high-quality web search via Brave Search API. Without it, the tool falls back to DuckDuckGo (free, no key required). See [Web Search Documentation](./docs/WEB_SEARCH.md) for details.
 
 ### Model Providers
 
@@ -215,7 +220,34 @@ GET /api/runs?agentId=<agent-id>&limit=50
 
 ## Built-In Tools
 
-### 1. Shell Tool
+### 1. Web Search Tool 🔍
+
+Search the internet for real-time information. Supports Brave Search API (premium) with automatic fallback to DuckDuckGo (free).
+
+**Features:**
+- High-quality search results via Brave Search API
+- Privacy-focused DuckDuckGo fallback (no API key required)
+- Returns titles, URLs, and snippets
+- Automatic provider fallback on errors
+
+**Configuration:**
+- Set `BRAVE_API_KEY` in `.env.local` for Brave Search
+- Works without API key (uses DuckDuckGo)
+
+**Example:**
+```json
+{
+  "name": "web_search",
+  "parameters": {
+    "query": "latest AI developments",
+    "numResults": 5
+  }
+}
+```
+
+**Documentation**: See [Web Search Documentation](./docs/WEB_SEARCH.md) for detailed setup and usage.
+
+### 2. Shell Tool
 
 Execute shell commands in a sandboxed temporary directory.
 
@@ -235,7 +267,7 @@ Execute shell commands in a sandboxed temporary directory.
 }
 ```
 
-### 2. HTTP Tool
+### 3. HTTP Tool
 
 Fetch data from HTTP endpoints.
 
@@ -255,7 +287,7 @@ Fetch data from HTTP endpoints.
 }
 ```
 
-### 3. File Tool
+### 4. File Tool
 
 Read, write, and list files in the workspace directory.
 
@@ -275,7 +307,7 @@ Read, write, and list files in the workspace directory.
 }
 ```
 
-### 4. Code Executor Tool
+### 5. Code Executor Tool
 
 Execute Python or JavaScript code in a sandboxed environment.
 
@@ -421,23 +453,31 @@ case 'cohere':
 ### Adding a New Tool
 
 1. Implement `Tool` interface in `infrastructure/adapters/tools/`
-2. Register in `DependencyContainer` in `infrastructure/config/bootstrap.ts`
+2. Register in `createDefaultTools()` function in `infrastructure/adapters/tools/index.ts`
 
 **Example:**
 ```typescript
-// infrastructure/adapters/tools/search.tool.ts
-export class SearchTool implements Tool {
-  name = 'web_search';
-  description = 'Search the web';
+// infrastructure/adapters/tools/custom.tool.ts
+export class CustomTool implements Tool {
+  name = 'custom_tool';
+  description = 'Custom tool description';
+  parameters: ToolParameterSchema = { /* ... */ };
 
-  async run(params: { query: string }) {
-    // Call search API
+  async execute(parameters: Record<string, unknown>): Promise<ToolResult> {
+    // Tool implementation
   }
 }
 
-// Register in bootstrap.ts
-this.toolPort.register(new SearchTool());
+// Register in infrastructure/adapters/tools/index.ts
+export function createDefaultTools(config: {...}): Tool[] {
+  return [
+    // ... other tools
+    new CustomTool(),
+  ];
+}
 ```
+
+**Note**: The `web_search` tool is already implemented with Brave Search support. See [Web Search Documentation](./docs/WEB_SEARCH.md) for details.
 
 ## Roadmap
 
@@ -477,6 +517,12 @@ cp .env.local.example .env.local
 nano .env.local
 ```
 
+**Note**: Most tools work without API keys. Only add keys for features you want to use:
+- `BRAVE_API_KEY`: For premium web search (optional, falls back to DuckDuckGo)
+- `OPENROUTER_API_KEY`: For remote models via OpenRouter
+- `OPENAI_API_KEY`: For direct OpenAI API access
+- `ANTHROPIC_API_KEY`: For direct Anthropic API access
+
 ### Database errors
 
 **Solution:** Regenerate the database:
@@ -505,12 +551,19 @@ This is a personal project, but contributions are welcome! Please:
 
 ISC
 
+## Documentation
+
+- [Web Search Tool](./docs/WEB_SEARCH.md) - Comprehensive guide to web search functionality
+- [SME Agent Design](./docs/SME_AGENT_DESIGN.md) - Guide for creating Subject Matter Expert agents
+- [SME Agent Implementation Status](./docs/SME_AGENT_IMPLEMENTATION_STATUS.md) - Current implementation status
+
 ## Acknowledgments
 
 - Built with [Next.js](https://nextjs.org/)
 - Database with [Drizzle ORM](https://orm.drizzle.team/)
 - Local models via [Ollama](https://ollama.ai)
 - Remote models via [OpenRouter](https://openrouter.ai)
+- Web search via [Brave Search API](https://brave.com/search/api/) and [DuckDuckGo](https://duckduckgo.com/)
 - Architecture inspired by [Hexagonal Architecture (Ports & Adapters)](https://alistair.cockburn.us/hexagonal-architecture/)
 
 ## Support
