@@ -135,64 +135,77 @@ export default function Dashboard() {
           </MorphButton>
         </AnimatedCard>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {agents.map((agent, index) => (
-            <AnimatedCard key={agent.id} delay={index * 0.05}>
-              <div className="flex justify-between items-start mb-6">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <AnimatedCard key={agent.id} delay={index * 0.02} className="p-3">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1 flex-1 pr-1">
                   {agent.name}
                 </h3>
-                <div className="flex gap-2">
+                <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => router.push(`/dashboard/chat/${agent.id}`)}
-                    className="text-accent hover:text-accent-hover text-sm transition-colors duration-150"
+                    className="text-accent hover:text-accent-hover text-xs transition-colors duration-150"
                     title="Chat with agent"
                   >
                     💬
                   </button>
                   <button
                     onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
-                    className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm transition-colors duration-150"
+                    className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-xs transition-colors duration-150"
                     title="Edit agent"
                   >
                     ✏️
                   </button>
                   <button
                     onClick={() => handleDelete(agent.id)}
-                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm transition-colors duration-150"
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs transition-colors duration-150"
                     title="Delete agent"
                   >
                     🗑️
                   </button>
                 </div>
               </div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+              <p className="text-gray-600 dark:text-gray-400 text-xs mb-2 line-clamp-2 min-h-[2.5rem]">
                 {agent.description}
               </p>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {agent.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1 bg-accent-light dark:bg-blue-900/30 text-accent dark:text-blue-300 text-xs rounded-full border border-accent/20 transition-colors duration-150"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div>Model: {agent.defaultModel}</div>
-                <div>Tools: {agent.allowedTools.length}</div>
+              {agent.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {agent.tags.slice(0, 2).map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-1.5 py-0.5 bg-accent-light dark:bg-blue-900/30 text-accent dark:text-blue-300 text-[10px] rounded border border-accent/20 transition-colors duration-150"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {agent.tags.length > 2 && (
+                    <span className="px-1.5 py-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+                      +{agent.tags.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="text-[10px] text-gray-500 dark:text-gray-500 space-y-0.5 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="truncate" title={agent.defaultModel}>
+                  <span className="text-gray-400 dark:text-gray-500">M: </span>
+                  <span className="font-mono">{agent.defaultModel.split(':').pop()}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 dark:text-gray-500">Tools: </span>
+                  <span>{agent.allowedTools.length}</span>
+                </div>
                 {agent.latestVersion && (
-                  <div className="pt-1">
-                    <span className="text-gray-400 dark:text-gray-500">Version: </span>
-                    <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
+                  <div className="truncate" title={agent.latestVersion}>
+                    <span className="text-gray-400 dark:text-gray-500">V: </span>
+                    <span className="font-mono text-[9px] text-gray-600 dark:text-gray-400">
                       {agent.latestVersion}
                     </span>
                   </div>
                 )}
                 {!agent.latestVersion && agent.promptVersion && (
-                  <div className="pt-1">
-                    <span className="text-gray-400 dark:text-gray-500">Prompt v{agent.promptVersion}</span>
+                  <div>
+                    <span className="text-gray-400 dark:text-gray-500">Pv{agent.promptVersion}</span>
                   </div>
                 )}
               </div>
