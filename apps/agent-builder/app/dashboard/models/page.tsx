@@ -52,9 +52,17 @@ export default function ModelsPage() {
     ? models.filter(m => m.provider === filterProvider)
     : models;
 
-  function formatCost(cost?: { inputPer1M: number; outputPer1M: number }): string {
+  function formatCost(cost?: { inputPer1M: number | string; outputPer1M: number | string }): string {
     if (!cost) return 'N/A';
-    return `$${cost.inputPer1M.toFixed(2)}/$1M in, $${cost.outputPer1M.toFixed(2)}/$1M out`;
+    const inputPer1M = typeof cost.inputPer1M === 'string' ? parseFloat(cost.inputPer1M) : cost.inputPer1M;
+    const outputPer1M = typeof cost.outputPer1M === 'string' ? parseFloat(cost.outputPer1M) : cost.outputPer1M;
+    
+    // Handle NaN cases
+    if (isNaN(inputPer1M) || isNaN(outputPer1M)) {
+      return 'N/A';
+    }
+    
+    return `$${inputPer1M.toFixed(2)}/$1M in, $${outputPer1M.toFixed(2)}/$1M out`;
   }
 
   return (

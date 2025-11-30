@@ -50,6 +50,8 @@ export default function ChatPage() {
   const [showRunSelector, setShowRunSelector] = useState(false);
   const [currentRunIndex, setCurrentRunIndex] = useState<number>(-1); // -1 means viewing latest/new conversation
   const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
+  const [traceWidth, setTraceWidth] = useState<number>(320); // Default width in pixels (w-80 = 320px)
+  const [isResizing, setIsResizing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const assistantMessageIndexRef = useRef<number>(-1);
@@ -62,6 +64,36 @@ export default function ChatPage() {
     setTimeout(() => inputRef.current?.focus(), 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
+
+  // Handle resize mouse events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = window.innerWidth - e.clientX;
+      // Constrain width between 200px and 800px
+      const constrainedWidth = Math.max(200, Math.min(800, newWidth));
+      setTraceWidth(constrainedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   // Load messages from the most recent run when agent loads
   useEffect(() => {
@@ -637,11 +669,16 @@ export default function ChatPage() {
                     className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     disabled={loading}
                   >
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.displayName} ({model.provider})
-                      </option>
-                    ))}
+                    {models.map((model: any) => {
+                      const hasToolUse = model.strengths?.includes('tool-use') ?? false;
+                      const isFree = !model.cost || (model.cost.inputPer1M === 0 && model.cost.outputPer1M === 0);
+                      
+                      return (
+                        <option key={model.id} value={model.id}>
+                          {hasToolUse ? '🔧 ' : ''}{isFree ? '$ ' : ''}{model.displayName} ({model.provider})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
@@ -996,22 +1033,50 @@ export default function ChatPage() {
 
       {/* Trace Viewer Sidebar */}
       {showTrace && (
-        <div className="fixed right-0 top-0 h-screen w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10">
-          <div className="h-full flex flex-col">
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 dark:text-white">Execution Trace</h2>
-              <button
-                onClick={() => setShowTrace(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <TraceViewer run={currentRun} loading={loading && !currentRun} />
+        <>
+          {/* Resize Handle */}
+          <div
+            className="fixed top-0 h-screen cursor-col-resize z-20 transition-colors"
+            style={{ 
+              right: `${traceWidth - 2}px`,
+              width: '6px',
+              backgroundColor: isResizing ? 'rgb(59 130 246)' : 'rgba(59, 130, 246, 0.3)'
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsResizing(true);
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.6)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+              }
+            }}
+          />
+          <div 
+            className="fixed right-0 top-0 h-screen bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10"
+            style={{ width: `${traceWidth}px` }}
+          >
+            <div className="h-full flex flex-col">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h2 className="font-semibold text-gray-900 dark:text-white">Execution Trace</h2>
+                <button
+                  onClick={() => setShowTrace(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <TraceViewer run={currentRun} loading={loading && !currentRun} />
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

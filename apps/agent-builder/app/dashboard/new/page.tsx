@@ -8,6 +8,11 @@ interface Model {
   id: string;
   displayName: string;
   provider: string;
+  strengths?: string[];
+  cost?: {
+    inputPer1M: number;
+    outputPer1M: number;
+  };
 }
 
 interface Tool {
@@ -204,11 +209,16 @@ export default function NewAgentPage() {
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
             >
               <option value="">Select a model...</option>
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.displayName} ({model.provider})
-                </option>
-              ))}
+              {models.map((model) => {
+                const hasToolUse = model.strengths?.includes('tool-use') ?? false;
+                const isFree = !model.cost || (model.cost.inputPer1M === 0 && model.cost.outputPer1M === 0);
+                
+                return (
+                  <option key={model.id} value={model.id}>
+                    {hasToolUse ? '🔧 ' : ''}{isFree ? '$ ' : ''}{model.displayName} ({model.provider})
+                  </option>
+                );
+              })}
             </select>
           </div>
 

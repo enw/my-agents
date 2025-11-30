@@ -8,7 +8,7 @@ export async function GET(
   try {
     const { id } = await params;
     const container = await getContainer();
-    const tracePort = container.adapters.tracePort;
+    const tracePort = container.tracePort;
     
     const cost = await tracePort.calculateRunCost(id);
     

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     const container = await getContainer();
-    const tracePort = container.adapters.tracePort;
+    const tracePort = container.tracePort;
     
     const pricing = await tracePort.getModelPricing(modelId, provider, forceUpdate);
     
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     const container = await getContainer();
-    const tracePort = container.adapters.tracePort;
+    const tracePort = container.tracePort;
     
     // Force update pricing from OpenRouter
     const pricing = await tracePort.getModelPricing(modelId, provider, true);

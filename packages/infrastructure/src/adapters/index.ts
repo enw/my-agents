@@ -1285,8 +1285,8 @@ export class DefaultModelRegistry implements ModelRegistryPort {
           supportsTools,
           supportsStreaming: true,
           cost: model.pricing ? {
-            inputPer1M: model.pricing.prompt || 0,
-            outputPer1M: model.pricing.completion || 0,
+            inputPer1M: typeof model.pricing.prompt === 'string' ? parseFloat(model.pricing.prompt) : (model.pricing.prompt || 0),
+            outputPer1M: typeof model.pricing.completion === 'string' ? parseFloat(model.pricing.completion) : (model.pricing.completion || 0),
           } : undefined,
           strengths: this.extractStrengths(model),
           metadata: {
