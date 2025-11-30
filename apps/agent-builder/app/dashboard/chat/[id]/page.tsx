@@ -675,7 +675,7 @@ export default function ChatPage() {
                       
                       return (
                         <option key={model.id} value={model.id}>
-                          {hasToolUse ? '🔧 ' : ''}{isFree ? '$ ' : ''}{model.displayName} ({model.provider})
+                          {model.displayName} ({model.provider}){hasToolUse ? ' 🔧' : ''}{isFree ? ' 🆓' : ''}
                         </option>
                       );
                     })}
