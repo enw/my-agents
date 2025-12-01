@@ -5,21 +5,21 @@
 :root {
   /* Bloomberg Lite Design Tokens - Light Mode */
   
-  /* Background Colors */
-  --bg-base: #FAFAFA;
-  --bg-elevated: #FFFFFF;
-  --bg-subtle: #F5F5F5;
-  --bg-hover: #EEEEEE;
-  --bg-selected: #E3E3E3;
+  /* Background Colors - Softer, less bright */
+  --bg-base: #F5F5F0;
+  --bg-elevated: #FCFCF8;
+  --bg-subtle: #F0F0EB;
+  --bg-hover: #E8E8E3;
+  --bg-selected: #E0E0DB;
   
   /* Border Colors */
-  --border-subtle: #E0E0E0;
-  --border-strong: #D0D0D0;
+  --border-subtle: #D8D8D3;
+  --border-strong: #C8C8C3;
   
   /* Text Colors */
-  --text-primary: #0A0A0A;
-  --text-secondary: #2A2A2A;
-  --text-muted: #6B6B6B;
+  --text-primary: #1A1A15;
+  --text-secondary: #3A3A35;
+  --text-muted: #6B6B66;
   --text-inverse: #FFFFFF;
   
   /* Accent Colors */
@@ -91,10 +91,10 @@
   --border-subtle: #1E222B;
   --border-strong: #2B3240;
   
-  /* Text Colors */
-  --text-primary: #F9FAFB;
-  --text-secondary: #C7CEDD;
-  --text-muted: #80879A;
+  /* Text Colors - Compaq Portable /// Amber */
+  --text-primary: #FFB000;
+  --text-secondary: #FFA500;
+  --text-muted: #CC8800;
   --text-inverse: #050608;
   
   /* Accent Colors */
