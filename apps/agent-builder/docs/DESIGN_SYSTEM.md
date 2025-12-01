@@ -1,117 +1,212 @@
-# Hyperminimal Kinetic Design System
+# Blueberg Lite Design System
 
 ## Overview
 
-The Hyperminimal Kinetic design system emphasizes clean, minimal surfaces with generous whitespace, smooth physics-inspired animations, and intentional motion that makes the interface feel alive and responsive.
+The Blueberg Lite design system creates a dense, terminal-inspired interface optimized for power users. Inspired by Bloomberg Terminal's information-dense research console aesthetic, it prioritizes functionality and information density over decorative elements, with a deep-blue, amber-on-dark console aesthetic.
 
 ## Core Principles
 
-### 1. Minimal Surfaces, High Whitespace
-- Clean, uncluttered interfaces
-- Generous padding and margins (minimum 1.5rem spacing)
-- Focus on content with ample breathing room
-- Subtle borders over heavy shadows
+### 1. Dense Information Display
+- Compact spacing (2-12px scale)
+- Maximum information per pixel
+- No decorative whitespace
+- Functional over beautiful
 
-### 2. One Accent Color Per View
-- Each view/section has a single, consistent accent color
-- Accent colors are used sparingly for emphasis
-- Primary accent: Blue-600 (#2563EB)
-- Status colors: Green (success), Red (error), Yellow (warning)
+### 2. Dark-First with Amber Text
+- Dark mode is the primary experience
+- Amber text (#FFB000) for dark mode (Compaq Portable /// style)
+- Soft, warm backgrounds for light mode
+- High contrast for readability
 
-### 3. Components Morph Rather Than Pop
-- Transitions should feel smooth and natural
-- Elements transform/morph their shape/size rather than appearing/disappearing
-- Use scale, opacity, and transform properties together
-- Avoid sudden pop-ins or harsh transitions
+### 3. Minimal Radii
+- Small border radii (2-4px maximum)
+- Sharp, functional corners
+- No rounded pill shapes
 
-### 4. Soft, Physics-Inspired Motion (Under 180ms)
-- All animations complete in under 180ms for responsiveness
-- Use easing functions that feel natural (ease-out, cubic-bezier)
-- Animations should feel like they have momentum
-- Common durations:
-  - Micro-interactions: 100ms
-  - Standard transitions: 150ms
-  - Complex animations: 180ms (maximum)
+### 4. Compact Typography
+- Base font size: 13px
+- Line height: 1.3 (tight)
+- Font scale: 11px (xs) → 16px (xl max)
+- Monospace for code/data
 
-### 5. Cards and Insights Animate with Glide + Fade
-- Entrance animations combine translateY (glide) with opacity (fade)
-- Stagger animations for lists/cards (50ms delay between items)
-- Exit animations should be quick and clean (fade out with slight scale down)
-
-### 6. Geometric Typography with Hierarchy via Scale
-- Use geometric, clean font stacks
-- Hierarchy established through font size, not weight
-- Consistent scale: base (16px), small (14px), large (18px), xl (24px), 2xl (32px)
-- Line heights: 1.5 for body, 1.2 for headings
+### 5. Fast Transitions
+- All transitions: 100-180ms
+- Kinetic easing functions
+- No slow animations
+- Immediate feedback
 
 ## Color Palette
 
-### Neutrals
-- **Background (Light)**: #FFFFFF
-- **Background (Dark)**: #0A0A0A
-- **Surface (Light)**: #FFFFFF
-- **Surface (Dark)**: #1A1A1A
-- **Border (Light)**: #E5E7EB
-- **Border (Dark)**: #374151
+### Dark Mode (Primary)
 
-### Text
-- **Foreground (Light)**: #171717
-- **Foreground (Dark)**: #EDEDED
-- **Muted (Light)**: #6B7280
-- **Muted (Dark)**: #9CA3AF
+**Backgrounds (Deep Navy):**
+- `--bg-base`: #020617 (near-black navy base)
+- `--bg-elevated`: #02081F (slightly lighter panels)
+- `--bg-subtle`: #050F24 (card backgrounds)
+- `--bg-hover`: #071327 (hover states)
+- `--bg-selected`: #0B1933 (selected items)
 
-### Accent (Single Per View)
-- **Primary**: #2563EB (Blue-600)
-- **Primary Hover**: #1D4ED8 (Blue-700)
-- **Primary Light**: #DBEAFE (Blue-100)
+**Borders:**
+- `--border-subtle`: #1E222B (subtle dividers)
+- `--border-strong`: #2B3240 (stronger borders)
 
-### Status Colors
-- **Success**: #10B981 (Green-500)
-- **Error**: #EF4444 (Red-500)
-- **Warning**: #F59E0B (Amber-500)
+**Text (Amber - Compaq Portable /// style):**
+- `--text-primary`: #FFB000 (bright amber)
+- `--text-secondary`: #FFA500 (orange-amber)
+- `--text-muted`: #CC8800 (darker amber)
+- `--text-inverse`: #050608 (for text on light backgrounds)
 
-## Spacing Scale
+**Accents:**
+- `--accent-blue`: #3B82F6 (primary actions)
+- `--accent-green`: #22C55E (success)
+- `--accent-amber`: #FACC15 (warnings)
+- `--accent-red`: #F97373 (errors)
+- `--accent-purple`: #A855F7 (special)
 
-Generous whitespace is fundamental to the design system:
+### Light Mode (Secondary)
 
-- **xs**: 0.25rem (4px)
-- **sm**: 0.5rem (8px)
-- **base**: 1rem (16px)
-- **lg**: 1.5rem (24px)
-- **xl**: 2rem (32px)
-- **2xl**: 3rem (48px)
-- **3xl**: 4rem (64px)
-- **4xl**: 6rem (96px)
+**Backgrounds:**
+- `--bg-base`: #F5F5F0 (warm off-white)
+- `--bg-elevated`: #FCFCF8 (light cream)
+- `--bg-subtle`: #F0F0EB (warm gray)
+- `--bg-hover`: #E8E8E3 (hover states)
+- `--bg-selected`: #E0E0DB (selected items)
 
-Minimum spacing between elements: 1.5rem (24px)
+**Borders:**
+- `--border-subtle`: #D8D8D3
+- `--border-strong`: #C8C8C3
+
+**Text:**
+- `--text-primary`: #1A1A15 (dark text)
+- `--text-secondary`: #3A3A35
+- `--text-muted`: #6B6B66
+- `--text-inverse`: #FFFFFF
+
+**Accents:** (Same as dark mode)
+
+## Spacing Scale (Compact)
+
+- `--space-1`: 2px
+- `--space-1.5`: 3px
+- `--space-2`: 4px (micro)
+- `--space-3`: 6px
+- `--space-4`: 8px (default)
+- `--space-5`: 10px
+- `--space-6`: 12px
+
+**Usage:**
+- Padding: 4-8px typical
+- Gaps: 2-4px between related items
+- Margins: 6-12px for sections
 
 ## Typography Scale
 
 ### Font Stack
 ```
-Font Family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif
+system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 
+'Helvetica Neue', sans-serif
 ```
 
 ### Scale
-- **xs**: 0.75rem (12px) - Labels, captions
-- **sm**: 0.875rem (14px) - Secondary text
-- **base**: 1rem (16px) - Body text
-- **lg**: 1.125rem (18px) - Emphasized body
-- **xl**: 1.5rem (24px) - Subheadings
-- **2xl**: 2rem (32px) - Headings
-- **3xl**: 2.5rem (40px) - Large headings
+- **xs**: 11px (labels, meta)
+- **sm**: 12px (table headers, secondary text)
+- **base**: 13px (body, list items)
+- **lg**: 14px (section titles)
+- **xl**: 16px (page title, max)
 
-### Hierarchy
-- Use size, not weight, to establish hierarchy
-- Regular weight (400) for body
-- Medium weight (500) for emphasis
-- Bold (700) only for critical information
+### Line Heights
+- All text: 1.3 (tight, dense)
+- Headings: 1.2 (tighter)
+
+## Border Radius
+
+- `--radius-xs`: 2px
+- `--radius-sm`: 3px
+- `--radius-md`: 4px (maximum)
+
+**Usage:**
+- Buttons: 3px
+- Inputs: 3px
+- Cards: 4px
+- No large radii
+
+## Shadows
+
+- `--shadow-soft`: 0 8px 24px rgba(0, 0, 0, 0.45) (dark mode)
+- `--shadow-soft`: 0 8px 24px rgba(0, 0, 0, 0.12) (light mode)
+
+**Usage:**
+- Modals only
+- No card shadows
+- No button shadows
+
+## Component Specifications
+
+### Buttons
+
+**Primary:**
+- Height: 28-30px
+- Padding: 8px 12px
+- Font: 12-13px, medium weight
+- Background: accent-blue
+- Text: text-inverse
+- Border radius: 3px
+- Hover: opacity 90% or darker shade
+
+**Secondary:**
+- Height: 28-30px
+- Padding: 8px 12px
+- Font: 12-13px, medium weight
+- Background: transparent
+- Border: 1px border-subtle
+- Text: text-secondary
+- Hover: bg-hover
+
+**Danger:**
+- Same as primary but accent-red
+
+### Inputs
+
+- Height: 28-30px
+- Padding: 6px 10px
+- Font: 13px
+- Background: bg-subtle
+- Border: 1px border-subtle
+- Border radius: 3px
+- Focus: border-accent-blue + ring
+
+### Tables
+
+- Row height: 30-32px
+- Cell padding: 8px (px-2 py-1)
+- Header: bg-subtle, text-muted, 12px
+- Borders: 1px border-subtle between rows
+- Hover: bg-hover
+- Selected: bg-selected + left border accent
+
+### Cards
+
+- Background: bg-elevated
+- Border: 1px border-subtle
+- Padding: 8px (px-2 py-2)
+- Border radius: 4px
+- Hover: border-strong
+
+### Command Palette
+
+- Width: 640px
+- Max height: 60vh
+- Background: bg-elevated
+- Border: border-strong
+- Item height: 28px
+- Footer: 12px text, muted
 
 ## Animation Guidelines
 
 ### Timing Functions
 
-**Standard Ease Out** (most common):
+**Kinetic Ease Out** (most common):
 ```css
 cubic-bezier(0.16, 1, 0.3, 1)
 ```
@@ -126,159 +221,95 @@ cubic-bezier(0.4, 0, 0.2, 1)
 cubic-bezier(0.25, 0.46, 0.45, 0.94)
 ```
 
-### Common Animations
-
-#### Glide + Fade Entrance
-```css
-@keyframes glide-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-```
-
-#### Morph (Scale + Opacity)
-```css
-@keyframes morph-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-```
-
-#### Fade Out
-```css
-@keyframes fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-```
-
-### Animation Durations
+### Durations
 
 | Purpose | Duration | Easing |
 |---------|----------|--------|
 | Hover states | 100ms | ease-out |
-| Standard transitions | 150ms | cubic-bezier(0.16, 1, 0.3, 1) |
-| Complex animations | 180ms | cubic-bezier(0.16, 1, 0.3, 1) |
-| Entrance animations | 180ms | cubic-bezier(0.25, 0.46, 0.45, 0.94) |
+| Standard transitions | 150ms | kinetic |
+| Complex animations | 180ms | gentle |
 
-## Component Patterns
+## Implementation
 
-### Cards
-- Minimal borders (1px solid, neutral color)
-- Generous padding (1.5rem minimum)
-- Subtle hover effects (border color change, slight scale)
-- Glide + fade entrance animation
-- No shadows (or very subtle if necessary)
+### CSS Variables
 
-### Buttons
-- Border-first design (outlined by default)
-- Fill on hover/active
-- Morph animation on state change
-- Minimum 150ms transition
-- Generous padding (0.75rem 1.5rem)
+All design tokens are defined as CSS variables in `app/globals.css`:
 
-### Tables
-- Clean borders between rows
-- Hover state: background color change
-- Sortable headers: subtle background change + icon animation
-- Checkboxes: smooth checked state transition
+```css
+:root {
+  /* Light mode tokens */
+  --bg-base: #F5F5F0;
+  --text-primary: #1A1A15;
+  /* ... */
+}
 
-### Forms
-- Inputs with subtle borders
-- Focus state: border color change + slight scale
-- Labels float/shrink on focus
-- Smooth validation feedback
-
-## Implementation Guidelines
-
-### CSS Custom Properties
-Use CSS variables for all design tokens:
-- Colors
-- Spacing
-- Typography
-- Animation durations
-- Easing functions
-
-### Tailwind Configuration
-- Extend default theme with design system tokens
-- Custom animation utilities
-- Custom spacing scale
-- Custom color palette
-
-### Component Animation Rules
-1. Always use `transform` and `opacity` (GPU-accelerated)
-2. Never animate `width`, `height`, `top`, `left` (layout properties)
-3. Use `will-change` sparingly and remove after animation
-4. Prefer CSS transitions over JavaScript animations when possible
-5. Use framer-motion for complex, orchestrated animations
-
-### Accessibility
-- Respect `prefers-reduced-motion` media query
-- Provide immediate feedback (no animation delay)
-- Ensure animations don't block critical interactions
-- Maintain keyboard navigation during animations
-
-## Dark Mode
-
-All design tokens must have dark mode equivalents:
-- Backgrounds become darker
-- Text becomes lighter
-- Borders become more subtle
-- Accent colors remain consistent
-- Maintain sufficient contrast ratios (WCAG AA minimum)
-
-## Examples
-
-### Card Component
-```tsx
-<div className="card">
-  {/* Content */}
-</div>
+.dark {
+  /* Dark mode tokens */
+  --bg-base: #050608;
+  --text-primary: #FFB000;
+  /* ... */
+}
 ```
 
-Styles:
-- Border: 1px solid neutral
-- Padding: 1.5rem
-- Entrance: glide-fade-in 180ms
-- Hover: border color + slight scale (1.01) 150ms
+### Tailwind Integration
 
-### Button Component
+Tokens are mapped to Tailwind utilities in `tailwind.config.ts`:
+
+```typescript
+theme: {
+  extend: {
+    colors: {
+      'bg-base': 'var(--bg-base)',
+      'text-primary': 'var(--text-primary)',
+      // ...
+    },
+    spacing: {
+      '1': 'var(--space-1)',
+      '2': 'var(--space-2)',
+      // ...
+    }
+  }
+}
+```
+
+### Usage Examples
+
+**Button:**
 ```tsx
-<button className="btn-primary">
+<button className="h-9 px-3 text-sm bg-accent-blue text-text-inverse rounded-sm">
   Click me
 </button>
 ```
 
-Styles:
-- Border: 2px solid accent
-- Padding: 0.75rem 1.5rem
-- Transition: all 150ms ease-out
-- Hover: background fill + scale (1.02)
-- Active: scale (0.98)
-
-### Input Component
+**Input:**
 ```tsx
-<input className="input" />
+<input className="h-9 px-2.5 py-1 border border-border-subtle rounded-sm bg-bg-subtle text-text-primary" />
 ```
 
-Styles:
-- Border: 1px solid neutral
-- Padding: 0.75rem 1rem
-- Transition: border-color 150ms, transform 150ms
-- Focus: border accent color + scale (1.01)
+**Table Row:**
+```tsx
+<tr className="h-8 hover:bg-bg-hover">
+  <td className="px-2 py-1 text-xs text-text-primary">Content</td>
+</tr>
+```
+
+## Density Mode
+
+The system supports a compact density mode via `[data-density="compact"]`:
+
+- Smaller button heights (28px → 24px)
+- Tighter spacing
+- Smaller fonts
+- Reduced padding
+
+## Accessibility
+
+- Maintain WCAG AA contrast ratios
+- Keyboard navigation throughout
+- Focus indicators visible
+- Screen reader support
+- Respect `prefers-reduced-motion`
+
+## Dark Mode Default
+
+Dark mode is the default experience. Light mode is available but secondary. The amber text in dark mode provides excellent readability and reduces eye strain for extended use.

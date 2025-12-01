@@ -10,7 +10,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Bloomberg Lite palette
+        // Blueberg Lite palette
         'bg-base': 'var(--bg-base)',
         'bg-elevated': 'var(--bg-elevated)',
         'bg-subtle': 'var(--bg-subtle)',

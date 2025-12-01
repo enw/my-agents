@@ -6,11 +6,16 @@ A minimalist Next.js application for building, testing, and interacting with too
 
 - **Local-First Architecture**: Run entirely on your machine with local models via Ollama
 - **Multi-Provider Support**: Seamlessly switch between Ollama, OpenRouter, OpenAI, and Anthropic
-- **Tool System**: Built-in tools for shell commands, HTTP requests, file operations, and code execution
+- **Tool System**: Built-in tools for shell commands, HTTP requests, file operations, web search, Wikipedia, and code execution
 - **Hexagonal Architecture**: Clean separation of concerns with ports & adapters pattern
-- **Agent Management**: Create, edit, and manage multiple agent configurations
-- **Execution Tracing**: Detailed logs of agent runs, tool calls, and token usage
+- **Agent Management**: Create, edit, fork, and manage multiple agent configurations with templates
+- **Execution Tracing**: Detailed logs of agent runs, tool calls, and token usage with cost tracking
 - **Security**: Sandboxed tool execution with per-agent allowlisting
+- **Blueberg Lite UI**: Dense, terminal-inspired interface optimized for power users
+- **Command System**: Powerful `/` commands for navigation, model switching, and advanced features
+- **Command Palette**: Quick access to commands, conversations, and actions (Cmd+K / Ctrl+K)
+- **Resizable Workspace**: 3-pane chat interface with resizable panels for conversations, messages, and trace viewer
+- **Onboarding Flow**: Guided tour for new users with quick start templates
 
 ## Architecture
 
@@ -143,6 +148,68 @@ OLLAMA_BASE_URL=http://localhost:11434
 - **Cost**: Pay-per-use
 - **Setup**: Get API key from https://console.anthropic.com
 - **Model ID Format**: `anthropic/model-name` (e.g., `anthropic/claude-3-5-sonnet-20241022`)
+
+## User Interface
+
+### Dashboard
+
+The main dashboard provides a dense table view of all your agents with:
+- **Sortable columns**: Agent name, model, tools, tags, last run, version
+- **Search & filters**: Quick search by name/description, filter by tags or providers
+- **Quick actions**: Chat, edit, fork, or delete agents directly from the table
+- **Compact design**: Blueberg Lite aesthetic with 30-32px row heights
+
+### Chat Workspace
+
+The chat interface features a 3-pane resizable layout:
+
+1. **Left Panel (Conversations)**: 
+   - List of all conversations for the current agent
+   - Compact conversation cards with metadata (model, turns, timestamp)
+   - "New Chat" button to start fresh conversations
+   - Navigation controls for previous/next conversations
+
+2. **Center Panel (Messages)**:
+   - Chat messages with sender lines (Agent/You, timestamp, model)
+   - Markdown rendering with syntax highlighting
+   - "Jump to latest" button when scrolled up
+   - Command input with autocomplete (type `/` to see commands)
+
+3. **Right Panel (Tools/Trace)**:
+   - **Trace tab**: Detailed execution trace with tool calls, token usage, costs
+   - **Tools tab**: List of available tools for the agent
+   - **Files tab**: File upload and management (coming soon)
+   - **Notes tab**: Scratchpad for conversation notes
+
+### Command System
+
+The application includes a powerful command system accessible via `/`:
+
+- **Navigation**: `/prev`, `/next`, `/latest`, `/goto <n>`
+- **Model switching**: `/model <model-id>`
+- **Trace viewer**: `/trace`, `/trace off`
+- **Help**: `/help`, `/commands`
+- **Conversation management**: `/export`, `/clear`
+
+**Command Palette (Cmd+K / Ctrl+K)**:
+- Search all commands with descriptions
+- Browse recent conversations
+- Quick actions (new chat, edit agent, dashboard)
+
+### Agent Templates
+
+Quick start with pre-configured agent templates:
+- **General Assistant**: Basic tools, friendly tone
+- **Code Assistant**: Python/TypeScript focused with code execution
+- **Research Agent**: Web search + Wikipedia for research tasks
+- **Data Analyst**: Data processing and analysis tools
+
+### Onboarding
+
+New users are guided through:
+1. Creating their first agent
+2. Starting a chat conversation
+3. Using commands (type `/help`)
 
 ## Usage
 
@@ -506,11 +573,15 @@ export function createDefaultTools(config: {...}): Tool[] {
 
 ### v0 (Current)
 
-- ✅ Agent management (CRUD)
+- ✅ Agent management (CRUD, fork, versioning)
 - ✅ Model abstraction (Ollama, OpenRouter, OpenAI, Anthropic)
-- ✅ Tool system (Shell, HTTP, File, Code Executor)
-- ✅ Execution tracing
-- ⏳ UI for agent management and chat interface
+- ✅ Tool system (Shell, HTTP, File, Web Search, Wikipedia, Code Executor)
+- ✅ Execution tracing with cost tracking
+- ✅ Blueberg Lite UI with dense table views
+- ✅ Chat workspace with resizable 3-pane layout
+- ✅ Command system with autocomplete and palette
+- ✅ Agent templates for quick start
+- ✅ Onboarding flow for new users
 
 ### v1 (Future)
 
@@ -580,6 +651,8 @@ ISC
 - [Wikipedia Tool](./docs/WIKIPEDIA_TOOL.md) - Guide to Wikipedia search and caching
 - [SME Agent Design](./docs/SME_AGENT_DESIGN.md) - Guide for creating Subject Matter Expert agents
 - [SME Agent Implementation Status](./docs/SME_AGENT_IMPLEMENTATION_STATUS.md) - Current implementation status
+- [UX Improvements Roadmap](./docs/UX_IMPROVEMENTS_ROADMAP.md) - Planned UX enhancements and current status
+- [Design System](./docs/DESIGN_SYSTEM.md) - Blueberg Lite design tokens and component specifications
 
 ## Acknowledgments
 

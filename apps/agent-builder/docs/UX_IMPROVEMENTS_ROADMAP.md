@@ -25,13 +25,13 @@
 - No clear value proposition on first visit
 
 **Solutions:**
-- [ ] Add first-run onboarding modal/tour
+- [x] Add first-run onboarding modal/tour
   - Step 1: "Create your first agent" → opens new agent form
   - Step 2: "Chat with your agent" → opens chat
   - Step 3: "Try a command: type `/help` in chat"
-- [ ] Add prominent "Quick Start" button on empty dashboard
+- [x] Add prominent "Quick Start" button on empty dashboard
   - Creates starter agent ("General Assistant") with sensible defaults
-- [ ] Replace empty state with guided flow instead of just a button
+- [x] Replace empty state with guided flow instead of just a button
 - [ ] Add "Getting Started" section in dashboard sidebar
 
 **Files to Modify:**
@@ -55,7 +55,7 @@
 - [ ] Two-step creation process:
   - **Step 1 (Quick Start):** Name, Description, System Prompt
   - **Step 2 (Advanced):** Model, Tools, Settings, Memory (collapsible)
-- [ ] Add "Use Template" dropdown with pre-configured agents:
+- [x] Add "Use Template" dropdown with pre-configured agents:
   - "Code Assistant" - Python/TypeScript focused
   - "Research Agent" - Web search + Wikipedia
   - "General Helper" - Basic tools, friendly tone
@@ -82,21 +82,21 @@
 - Unclear what's clickable vs informational
 
 **Solutions:**
-- [ ] Consolidate navigation into single left sidebar with tabs:
-  - "Chats" tab (conversations list)
-  - "Agent Info" tab (settings, memory, version history)
-  - "Tools" tab (trace viewer, execution logs)
-- [ ] Add floating action button (FAB) for "New Chat" in bottom-right
-- [ ] Add command palette (Cmd+K / Ctrl+K):
-  - Available commands with descriptions
-  - Recent conversations
-  - Agent actions (export, schedule, etc.)
-- [ ] Add status bar at top showing:
-  - Current agent name (clickable to edit)
-  - Active model with cost indicator
-  - Connection status
-- [ ] Make trace viewer toggleable overlay instead of fixed sidebar
-- [ ] Improve command autocomplete visibility
+- [x] Consolidate navigation into single left sidebar with tabs:
+  - "Chats" tab (conversations list) - ✅ Implemented as ChatSidebar
+  - "Agent Info" tab (settings, memory, version history) - ✅ Partially in ChatRightPanel
+  - "Tools" tab (trace viewer, execution logs) - ✅ Implemented in ChatRightPanel
+- [x] Add floating action button (FAB) for "New Chat" in bottom-right - ✅ "New Chat" button in sidebar
+- [x] Add command palette (Cmd+K / Ctrl+K):
+  - Available commands with descriptions - ✅ Implemented
+  - Recent conversations - ✅ Implemented
+  - Agent actions (export, schedule, etc.) - ✅ Implemented
+- [x] Add status bar at top showing:
+  - Current agent name (clickable to edit) - ✅ Implemented in chat header
+  - Active model with cost indicator - ✅ Model selector in header
+  - Connection status - ⏳ Pending
+- [x] Make trace viewer toggleable overlay instead of fixed sidebar - ✅ Implemented in ChatRightPanel tabs
+- [x] Improve command autocomplete visibility - ✅ CommandAutocomplete component implemented
 
 **Files to Modify:**
 - `app/dashboard/chat/[id]/page.tsx` - Major refactor
@@ -109,7 +109,7 @@
 ## Phase 2: Power User Features (MEDIUM PRIORITY)
 
 ### 4. Improve Agent Card Design on Dashboard
-**Status:** 🔴 Not Started  
+**Status:** ✅ Completed (Redesigned as Table)  
 **Impact:** ⭐⭐⭐⭐  
 **Effort:** Low
 
@@ -119,11 +119,11 @@
 - No clear hierarchy
 
 **Solutions:**
-- [ ] Replace emoji buttons with icon buttons + tooltips
-- [ ] Show preview of last message or conversation summary
-- [ ] Add "Last active: 2 hours ago" timestamp
-- [ ] Card hover state shows quick actions
-- [ ] Group cards by tags or add search/filter bar
+- [x] Replace emoji buttons with icon buttons + tooltips - ✅ Converted to table with icon buttons
+- [x] Show preview of last message or conversation summary - ✅ Shows description in table
+- [x] Add "Last active: 2 hours ago" timestamp - ✅ Shows last run time
+- [x] Card hover state shows quick actions - ✅ Row hover states
+- [x] Group cards by tags or add search/filter bar - ✅ Search and filter implemented
 - [ ] Add "Recently used" section at top
 
 **Files to Modify:**
@@ -183,7 +183,7 @@
 ---
 
 ### 7. Improve Command Discoverability and Help
-**Status:** 🔴 Not Started  
+**Status:** 🟡 Partially Complete  
 **Impact:** ⭐⭐⭐⭐  
 **Effort:** Low
 
@@ -193,10 +193,10 @@
 - No visual indication commands exist
 
 **Solutions:**
-- [ ] Show command hint in input placeholder
-- [ ] Add "?" button next to input that opens command reference panel
-- [ ] Show command suggestions as you type `/` with categories
-- [ ] Add tooltips explaining what each command does
+- [x] Show command hint in input placeholder - ✅ "Type your message... (use / for commands)"
+- [x] Add "?" button next to input that opens command reference panel - ✅ CommandHelpModal exists
+- [x] Show command suggestions as you type `/` with categories - ✅ CommandAutocomplete with categories
+- [x] Add tooltips explaining what each command does - ✅ Added title tooltips to command items
 - [ ] Add "Command History" showing recently used commands
 
 **Files to Modify:**

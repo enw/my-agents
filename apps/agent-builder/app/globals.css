@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* Bloomberg Lite Design Tokens - Light Mode */
+  /* Blueberg Lite Design Tokens - Light Mode */
   
   /* Background Colors - Softer, less bright */
   --bg-base: #F5F5F0;
@@ -78,14 +78,14 @@
 }
 
 .dark {
-  /* Bloomberg Lite Design Tokens - Dark Mode */
+  /* Blueberg Lite Design Tokens - Dark Mode (Deep Navy) */
   
-  /* Background Colors */
-  --bg-base: #050608;
-  --bg-elevated: #0B0D10;
-  --bg-subtle: #111318;
-  --bg-hover: #181B22;
-  --bg-selected: #1F2430;
+  /* Background Colors - deep blue stack */
+  --bg-base: #020617;      /* near-black navy */
+  --bg-elevated: #02081F;  /* panels */
+  --bg-subtle: #050F24;    /* cards */
+  --bg-hover: #071327;     /* hovers */
+  --bg-selected: #0B1933;  /* selected rows/items */
   
   /* Border Colors */
   --border-subtle: #1E222B;

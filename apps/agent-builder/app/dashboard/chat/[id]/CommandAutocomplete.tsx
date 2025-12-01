@@ -117,9 +117,9 @@ export default function CommandAutocomplete({
     return (
       <div
         ref={containerRef}
-        className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-[300px] overflow-y-auto z-50"
+        className="absolute bottom-full left-0 right-0 mb-2 bg-bg-elevated border border-border-subtle rounded-sm shadow-soft max-h-[300px] overflow-y-auto z-50"
       >
-        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+        <div className="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wide border-b border-border-subtle sticky top-0 bg-bg-elevated">
           Suggestions for /{suggestionCommand.name}
         </div>
         {suggestions.map((suggestion, index) => (
@@ -130,14 +130,14 @@ export default function CommandAutocomplete({
               // Call onSelect with the suggestion
               onSelect(suggestionCommand, suggestion);
             }}
-            className="px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+            className="px-4 py-2 cursor-pointer hover:bg-bg-hover transition-colors border-b border-border-subtle last:border-b-0"
           >
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-gray-900 dark:text-white">
+              <span className="font-mono text-sm text-text-primary">
                 {suggestion}
               </span>
               {suggestionCommand?.name === 'model' && context.models.find((m: any) => m.id === suggestion) && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-text-muted">
                   ({context.models.find((m: any) => m.id === suggestion)?.displayName || suggestion})
                 </span>
               )}
@@ -157,14 +157,14 @@ export default function CommandAutocomplete({
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-[300px] overflow-y-auto z-50"
+      className="absolute bottom-full left-0 right-0 mb-2 bg-bg-elevated border border-border-subtle rounded-sm shadow-soft max-h-[300px] overflow-y-auto z-50"
       style={{
         animation: 'fadeIn 0.2s ease-out',
       }}
     >
       {Object.entries(groupedCommands).map(([category, categoryCommands]) => (
         <div key={category}>
-          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
+          <div className="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wide border-b border-border-subtle sticky top-0 bg-bg-elevated">
             {categoryLabels[category as CommandCategory]}
           </div>
           {categoryCommands.map((command) => {
@@ -179,35 +179,36 @@ export default function CommandAutocomplete({
                 key={command.name}
                 ref={isSelected ? selectedRef : null}
                 onClick={() => onSelect(command)}
-                className={`px-4 py-3 cursor-pointer transition-colors ${
+                className={`px-3 py-2 cursor-pointer transition-colors border-b border-border-subtle last:border-b-0 ${
                   isSelected
-                    ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500'
-                    : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    ? 'bg-bg-selected border-l-2 border-accent-blue'
+                    : 'hover:bg-bg-hover'
                 }`}
+                title={command.description}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs font-semibold text-text-primary">
                         /{command.name}
                       </span>
                       <span
-                        className={`text-xs px-1.5 py-0.5 rounded ${categoryColors[command.category]}`}
+                        className={`text-[10px] px-1 py-0.5 rounded-sm ${categoryColors[command.category]}`}
                       >
                         {categoryLabels[command.category]}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                    <p className="text-xs text-text-secondary mb-0.5">
                       {command.description}
                     </p>
                     {command.usage && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                      <p className="text-[10px] text-text-muted font-mono">
                         {command.usage}
                       </p>
                     )}
                     {command.examples && command.examples.length > 0 && (
-                      <div className="mt-1">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="mt-0.5">
+                        <p className="text-[10px] text-text-muted">
                           Examples:{' '}
                           <span className="font-mono">
                             {command.examples.join(', ')}
@@ -223,7 +224,7 @@ export default function CommandAutocomplete({
         </div>
       ))}
       {commands.length === 0 && (
-        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+        <div className="px-4 py-3 text-xs text-text-muted text-center">
           No commands found
         </div>
       )}
