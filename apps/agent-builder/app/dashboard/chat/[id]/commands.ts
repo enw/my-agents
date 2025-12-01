@@ -182,3 +182,4 @@ export function getCommandsByCategory(category: CommandCategory): CommandDefinit
   return COMMANDS.filter((cmd) => cmd.category === category);
 }
 
+

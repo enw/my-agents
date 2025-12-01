@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2018",
     "lib": ["dom", "dom.iterable", "esnext"],
     "strict": true,
     "esModuleInterop": true,
@@ -12,6 +12,7 @@
   },
   "exclude": ["node_modules", "dist", ".next"]
 }
+
 
 
 

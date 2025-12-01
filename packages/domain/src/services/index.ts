@@ -69,6 +69,11 @@ export interface ExecutionOptions {
   maxTurns?: number; // Prevent infinite loops (default: 10)
   streamSessionId?: string; // For streaming responses
   conversationHistory?: Message[]; // For continuing conversations
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  }; // Optional model settings override
 }
 
 import { generateMemoryHash, generateAgentVersion } from './versioning';
