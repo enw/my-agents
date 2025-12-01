@@ -8,6 +8,9 @@ import remarkGfm from 'remark-gfm';
 import TraceViewer from '../../../components/TraceViewer';
 import ThemeToggle from '../../../components/ThemeToggle';
 import CommandAutocomplete from './CommandAutocomplete';
+import CommandHelpModal from '../../../components/CommandHelpModal';
+import CommandPalette from '../../../components/CommandPalette';
+import ChatSidebar from '../../../components/ChatSidebar';
 import { getAllCommands, CommandDefinition, CommandContext } from './commands';
 import { parseCommand, filterCommands, completeCommandName } from './commandParser';
 import { executeCommand, CommandStateSetters } from './commandExecutor';
@@ -51,18 +54,13 @@ export default function ChatPage() {
   const [models, setModels] = useState<any[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [previousRuns, setPreviousRuns] = useState<any[]>([]);
-  const [continueRunPaneOpen, setContinueRunPaneOpen] = useState(true); // Left pane open by default
   const [currentRunIndex, setCurrentRunIndex] = useState<number>(-1); // -1 means viewing latest/new conversation
   const [allRuns, setAllRuns] = useState<any[]>([]); // All runs for navigation
-  const [traceWidth, setTraceWidth] = useState<number>(320); // Default width in pixels (w-80 = 320px)
-  const [isResizing, setIsResizing] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [runToContinue, setRunToContinue] = useState<string | null>(null); // Track which run we're continuing
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const assistantMessageIndexRef = useRef<number>(-1);
-  const sidebarScrollRef = useRef<HTMLDivElement>(null);
-  const activeRunRef = useRef<HTMLDivElement>(null);
   
   // Command autocomplete state
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -71,6 +69,10 @@ export default function ChatPage() {
   const [cursorPosition, setCursorPosition] = useState(0);
   const [temperature, setTemperature] = useState<number | null>(null);
   const [maxTokens, setMaxTokens] = useState<number | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'agent' | 'tools'>('chats');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     // Reset state when agent changes (starting fresh)
@@ -88,43 +90,19 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
-  // Handle resize mouse events
+  // Handle Cmd+K / Ctrl+K for command palette
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      
-      const newWidth = window.innerWidth - e.clientX;
-      // Constrain width between 200px and 800px
-      const constrainedWidth = Math.max(200, Math.min(800, newWidth));
-      setTraceWidth(constrainedWidth);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(true);
+      }
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizing]);
-
-  // Scroll to active conversation when currentRunIndex changes
-  useEffect(() => {
-    if (currentRunIndex >= 0 && continueRunPaneOpen) {
-      scrollToActiveConversation();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRunIndex, continueRunPaneOpen]);
 
   // Don't auto-load messages - start fresh by default
   // Messages are only loaded when:
@@ -210,44 +188,21 @@ export default function ChatPage() {
     }
   }
 
-  // Scroll to active conversation in sidebar
-  function scrollToActiveConversation() {
-    if (activeRunRef.current && sidebarScrollRef.current) {
-      // Use setTimeout to ensure DOM has updated
-      setTimeout(() => {
-        if (activeRunRef.current && sidebarScrollRef.current) {
-          const container = sidebarScrollRef.current;
-          const activeElement = activeRunRef.current;
-          
-          // Scroll so the active element is at the top (accounting for padding)
-          const scrollTop = activeElement.offsetTop - container.offsetTop - 16; // 16px for padding
-          container.scrollTo({
-            top: Math.max(0, scrollTop),
-            behavior: 'smooth',
-          });
-        }
-      }, 100);
-    }
-  }
-
   function goToPreviousRun() {
     if (currentRunIndex > 0) {
       loadRunByIndex(currentRunIndex - 1);
-      scrollToActiveConversation();
     }
   }
 
   function goToNextRun() {
     if (currentRunIndex < allRuns.length - 1) {
       loadRunByIndex(currentRunIndex + 1);
-      scrollToActiveConversation();
     }
   }
 
   function goToLatestRun() {
     if (allRuns.length > 0) {
       loadRunByIndex(0);
-      scrollToActiveConversation();
     }
   }
 
@@ -561,7 +516,10 @@ export default function ChatPage() {
       const result = await executeCommand(command, args, context, setters);
       
       if (result.success) {
-        if (result.shouldSaveToHistory && result.transformedMessage) {
+        if (result.showHelp) {
+          // Show help modal
+          setShowHelpModal(true);
+        } else if (result.shouldSaveToHistory && result.transformedMessage) {
           // For semantic commands, send the transformed message
           setInput(result.transformedMessage);
           // Trigger send after a brief delay to allow state to update
@@ -893,117 +851,41 @@ export default function ChatPage() {
 
   return (
     <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
-      {/* Continue Run Left Pane */}
-      <aside
-        className={`${
-          continueRunPaneOpen ? 'w-80' : 'w-0'
-        } transition-all duration-300 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-hidden flex-shrink-0`}
-      >
-        <div className="h-full flex flex-col">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900 dark:text-white">
-              Continue Previous Conversation
-            </h2>
-            <button
-              onClick={() => setContinueRunPaneOpen(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
-              title="Toggle Continue Run Sidebar"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          </div>
-          <div 
-            ref={sidebarScrollRef}
-            className="flex-1 overflow-y-auto p-4"
-          >
-            <button
-              onClick={startNewChat}
-              className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Chat
-            </button>
-            {allRuns.length === 0 ? (
-              <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-                No previous conversations found
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {allRuns.map((run, index) => {
-                  const isActive = currentRunIndex === index;
-                  return (
-                    <div
-                      key={run.id}
-                      ref={isActive ? activeRunRef : null}
-                      className={`p-4 border rounded-lg cursor-pointer transition ${
-                        isActive
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400 shadow-md'
-                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                      onClick={() => {
-                        loadConversation(run.id);
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className={`font-medium text-sm ${
-                            isActive
-                              ? 'text-blue-900 dark:text-blue-100'
-                              : 'text-gray-900 dark:text-white'
-                          }`}>
-                            {new Date(run.createdAt).toLocaleString()}
-                          </p>
-                          <p className={`text-xs ${
-                            isActive
-                              ? 'text-blue-700 dark:text-blue-300'
-                              : 'text-gray-600 dark:text-gray-400'
-                          }`}>
-                            {run.turns?.length || 0} turns • {run.totalTokens?.totalTokens || 0} tokens
-                          </p>
-                        </div>
-                        <span className={`text-xs ${
-                          isActive
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {run.modelUsed}
-                        </span>
-                      </div>
-                      {run.turns && run.turns.length > 0 && (
-                        <p className={`text-sm truncate ${
-                          isActive
-                            ? 'text-blue-800 dark:text-blue-200'
-                            : 'text-gray-600 dark:text-gray-400'
-                        }`}>
-                          {run.turns[run.turns.length - 1].userMessage}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </aside>
+      {/* Tabbed Sidebar */}
+      {sidebarOpen && (
+        <ChatSidebar
+          agentId={agentId}
+          allRuns={allRuns}
+          currentRunIndex={currentRunIndex}
+          onLoadConversation={loadConversation}
+          onStartNewChat={startNewChat}
+          onGoToPrevious={goToPreviousRun}
+          onGoToNext={goToNextRun}
+          onGoToLatest={goToLatestRun}
+          activeTab={sidebarTab}
+          onTabChange={setSidebarTab}
+          agent={agent}
+          currentRun={currentRun}
+          showTrace={showTrace}
+          onToggleTrace={() => setShowTrace(!showTrace)}
+          TraceViewerComponent={TraceViewer}
+          loading={loading && !currentRun}
+        />
+      )}
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col transition-all overflow-hidden h-full ${showTrace ? 'mr-80' : ''}`}>
+      <div className="flex-1 flex flex-col transition-all overflow-hidden h-full">
         {/* Header - FIXED */}
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
           <div className="max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setContinueRunPaneOpen(!continueRunPaneOpen)}
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
-                  title="Toggle Continue Run Sidebar"
+                  title="Toggle Sidebar"
                 >
-                  {continueRunPaneOpen ? (
+                  {sidebarOpen ? (
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
@@ -1020,43 +902,15 @@ export default function ChatPage() {
                   ← Back to Dashboard
                 </Link>
               </div>
-              {/* Navigation Controls */}
-              {allRuns.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={goToPreviousRun}
-                    disabled={currentRunIndex <= 0}
-                    className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Previous conversation"
-                  >
-                    ← Prev
-                  </button>
-                  <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
-                    {currentRunIndex >= 0 ? (
-                      `Conversation ${currentRunIndex + 1} of ${allRuns.length}`
-                    ) : (
-                      'Latest'
-                    )}
-                  </span>
-                  <button
-                    onClick={goToNextRun}
-                    disabled={currentRunIndex >= allRuns.length - 1}
-                    className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Next conversation"
-                  >
-                    Next →
-                  </button>
-                  {currentRunIndex !== 0 && (
-                    <button
-                      onClick={goToLatestRun}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                      title="Go to latest conversation"
-                    >
-                      Latest
-                    </button>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCommandPalette(true)}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  title="Open command palette (Cmd+K)"
+                >
+                  ⌘K
+                </button>
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1102,12 +956,6 @@ export default function ChatPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <ThemeToggle />
-                  <button
-                    onClick={() => setShowTrace(!showTrace)}
-                    className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                  >
-                    {showTrace ? 'Hide' : 'Show'} Trace
-                  </button>
                 </div>
               </div>
             </div>
@@ -1412,53 +1260,46 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Trace Viewer Sidebar */}
+      {/* Trace Viewer Overlay */}
       {showTrace && (
-        <>
-          {/* Resize Handle */}
-          <div
-            className="fixed top-0 h-screen cursor-col-resize z-20 transition-colors"
-            style={{ 
-              right: `${traceWidth - 2}px`,
-              width: '6px',
-              backgroundColor: isResizing ? 'rgb(59 130 246)' : 'rgba(59, 130, 246, 0.3)'
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setIsResizing(true);
-            }}
-            onMouseEnter={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.6)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
-              }
-            }}
-          />
-          <div 
-            className="fixed right-0 top-0 h-screen bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10"
-            style={{ width: `${traceWidth}px` }}
-          >
-            <div className="h-full flex flex-col">
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <h2 className="font-semibold text-gray-900 dark:text-white">Execution Trace</h2>
-                <button
-                  onClick={() => setShowTrace(false)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <TraceViewer run={currentRun} loading={loading && !currentRun} />
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Execution Trace</h2>
+              <button
+                onClick={() => setShowTrace(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden p-6">
+              <TraceViewer run={currentRun} loading={loading && !currentRun} />
             </div>
           </div>
-        </>
+        </div>
       )}
+
+      {/* Help Modal */}
+      <CommandHelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onSelectCommand={(command) => {
+          setShowCommandPalette(false);
+          setInput(`/${command.name} `);
+          inputRef.current?.focus();
+        }}
+        agentId={agentId}
+        runs={allRuns}
+      />
     </div>
   );
 }

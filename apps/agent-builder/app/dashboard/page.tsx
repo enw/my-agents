@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AnimatedCard from '../components/AnimatedCard';
 import MorphButton from '../components/MorphButton';
+import OnboardingModal, { hasCompletedOnboarding } from '../components/OnboardingModal';
 import { motion } from 'framer-motion';
 
 interface Agent {
@@ -28,9 +29,15 @@ export default function Dashboard() {
   const [forkingAgent, setForkingAgent] = useState<string | null>(null);
   const [forkName, setForkName] = useState('');
   const [forkCopyMemory, setForkCopyMemory] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     loadAgents();
+    // Check if user has completed onboarding
+    if (!hasCompletedOnboarding() && agents.length === 0) {
+      // Only show if no agents exist (first visit)
+      setShowOnboarding(true);
+    }
   }, []);
 
   async function loadAgents() {
@@ -134,6 +141,50 @@ export default function Dashboard() {
     }
   }
 
+  async function handleQuickStart() {
+    try {
+      // Load available models first
+      const modelsResponse = await fetch('/api/models');
+      if (!modelsResponse.ok) {
+        throw new Error('Failed to load models');
+      }
+      const models = await modelsResponse.json();
+      
+      // Use first available model, or empty string if none available
+      const defaultModel = models.length > 0 ? models[0].id : '';
+
+      // Create a quick start agent with sensible defaults
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'General Assistant',
+          description: 'A helpful AI assistant that can answer questions and use basic tools',
+          systemPrompt: 'You are a helpful AI assistant. You help users with questions, tasks, and provide clear, accurate information. When you need to use tools, explain what you\'re doing.',
+          defaultModel: defaultModel,
+          allowedTools: ['http', 'file'], // Basic tools only
+          tags: ['general', 'quick-start'],
+          settings: {
+            temperature: 0.7,
+            maxTokens: 4096,
+            topP: 1.0,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create quick start agent');
+      }
+
+      const agent = await response.json();
+      await loadAgents();
+      router.push(`/dashboard/chat/${agent.id}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create quick start agent');
+    }
+  }
+
   return (
     <div className="p-8">
       <motion.div
@@ -167,12 +218,33 @@ export default function Dashboard() {
         </div>
       ) : agents.length === 0 ? (
         <AnimatedCard className="text-center py-16">
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            No agents yet. Create your first agent to get started!
-          </p>
-          <MorphButton variant="primary" onClick={() => router.push('/dashboard/new')}>
-            Create Your First Agent
-          </MorphButton>
+          <div className="max-w-md mx-auto">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+              Welcome to Agent Builder!
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Create your first AI agent to get started. You can customize everything later.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <MorphButton variant="primary" onClick={() => router.push('/dashboard/new')}>
+                Create Your First Agent
+              </MorphButton>
+              <MorphButton 
+                variant="secondary" 
+                onClick={() => setShowOnboarding(true)}
+              >
+                Take a Tour
+              </MorphButton>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+              Or try a <button 
+                onClick={() => handleQuickStart()}
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Quick Start
+              </button> with a pre-configured agent
+            </p>
+          </div>
         </AnimatedCard>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
@@ -321,6 +393,13 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onComplete={() => setShowOnboarding(false)}
+      />
     </div>
   );
 }

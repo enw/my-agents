@@ -6,6 +6,7 @@ export interface CommandResult {
   transformedMessage?: string; // For semantic commands
   error?: string;
   clearInput?: boolean; // Whether to clear input after execution
+  showHelp?: boolean; // Whether to show help modal
 }
 
 export interface CommandStateSetters {
@@ -115,14 +116,15 @@ function executeLocalCommand(
       };
 
     case 'help':
-      // Show help - could be a modal or just clear input
+      // Show help modal - this will be handled by the UI component
+      // We return a special flag that the UI can detect
       setters.setError(null);
       setters.setInput('');
-      // TODO: Could show a help modal here
       return {
         success: true,
         shouldSaveToHistory: false,
         clearInput: true,
+        showHelp: true, // Special flag for UI to show help modal
       };
 
     case 'queue':
