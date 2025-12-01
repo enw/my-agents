@@ -62,3 +62,4 @@ This reduces visual clutter and makes navigation more intuitive. The trace viewe
 - Chat interface has been consolidated into a cleaner tabbed sidebar
 - Trace viewer is now toggleable and integrated into sidebar
 
+
