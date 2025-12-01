@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AnimatedCard from '../components/AnimatedCard';
 import MorphButton from '../components/MorphButton';
 import OnboardingModal, { hasCompletedOnboarding } from '../components/OnboardingModal';
-import { motion } from 'framer-motion';
 
 interface Agent {
   id: string;
@@ -17,9 +16,16 @@ interface Agent {
   tags: string[];
   createdAt: string;
   updatedAt: string;
-  latestVersion?: string; // Latest agent version from most recent run
-  promptVersion?: number; // Current prompt version
+  latestVersion?: string;
+  promptVersion?: number;
+  lastRun?: {
+    status: 'running' | 'completed' | 'error';
+    createdAt: string;
+  };
 }
+
+type SortField = 'name' | 'model' | 'tools' | 'tags' | 'lastRun' | 'version';
+type SortDirection = 'asc' | 'desc';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -30,6 +36,11 @@ export default function Dashboard() {
   const [forkName, setForkName] = useState('');
   const [forkCopyMemory, setForkCopyMemory] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterTag, setFilterTag] = useState<string>('');
+  const [filterProvider, setFilterProvider] = useState<string>('');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   useEffect(() => {
     loadAgents();
@@ -49,7 +60,7 @@ export default function Dashboard() {
       }
       const agentsData = await response.json();
       
-      // Fetch latest version for each agent
+      // Fetch latest version and last run for each agent
       const agentsWithVersions = await Promise.all(
         agentsData.map(async (agent: Agent) => {
           try {
@@ -57,8 +68,16 @@ export default function Dashboard() {
             const runsResponse = await fetch(`/api/runs?agentId=${agent.id}&limit=1`);
             if (runsResponse.ok) {
               const runs = await runsResponse.json();
-              if (runs.length > 0 && runs[0].agentVersion) {
-                return { ...agent, latestVersion: runs[0].agentVersion };
+              if (runs.length > 0) {
+                const latestRun = runs[0];
+                return {
+                  ...agent,
+                  latestVersion: latestRun.agentVersion,
+                  lastRun: {
+                    status: latestRun.status,
+                    createdAt: latestRun.createdAt,
+                  },
+                };
               }
             }
             
@@ -141,6 +160,130 @@ export default function Dashboard() {
     }
   }
 
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) {
+      return (
+        <span className="ml-1 text-text-muted opacity-0 group-hover:opacity-100 transition">
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        </span>
+      );
+    }
+    return (
+      <span className="ml-1 text-accent-blue">
+        {sortDirection === 'asc' ? (
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </span>
+    );
+  }
+
+  function formatLastRun(lastRun?: Agent['lastRun']) {
+    if (!lastRun) return '—';
+    const date = new Date(lastRun.createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  // Get unique tags and providers for filters
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    agents.forEach(agent => agent.tags.forEach(tag => tagSet.add(tag)));
+    return Array.from(tagSet).sort();
+  }, [agents]);
+
+  const allProviders = useMemo(() => {
+    const providerSet = new Set<string>();
+    agents.forEach(agent => {
+      const provider = agent.defaultModel.split(':')[0];
+      if (provider) providerSet.add(provider);
+    });
+    return Array.from(providerSet).sort();
+  }, [agents]);
+
+  // Filter and sort agents
+  const filteredAndSortedAgents = useMemo(() => {
+    let filtered = agents.filter(agent => {
+      const matchesSearch = !searchQuery || 
+        agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        agent.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTag = !filterTag || agent.tags.includes(filterTag);
+      const matchesProvider = !filterProvider || 
+        agent.defaultModel.toLowerCase().startsWith(filterProvider.toLowerCase());
+      return matchesSearch && matchesTag && matchesProvider;
+    });
+
+    filtered.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'model':
+          aVal = a.defaultModel.toLowerCase();
+          bVal = b.defaultModel.toLowerCase();
+          break;
+        case 'tools':
+          aVal = a.allowedTools.length;
+          bVal = b.allowedTools.length;
+          break;
+        case 'tags':
+          aVal = a.tags.join(',').toLowerCase();
+          bVal = b.tags.join(',').toLowerCase();
+          break;
+        case 'lastRun':
+          aVal = a.lastRun?.createdAt ? new Date(a.lastRun.createdAt).getTime() : 0;
+          bVal = b.lastRun?.createdAt ? new Date(b.lastRun.createdAt).getTime() : 0;
+          break;
+        case 'version':
+          aVal = a.latestVersion || a.promptVersion || 0;
+          bVal = b.latestVersion || b.promptVersion || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        const comparison = aVal.localeCompare(bVal);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [agents, searchQuery, filterTag, filterProvider, sortField, sortDirection]);
+
   async function handleQuickStart() {
     try {
       // Load available models first
@@ -186,163 +329,276 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
-          Agent Dashboard
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Manage your AI agents and view execution history
-        </p>
-      </motion.div>
+    <div className="p-3">
+      {/* Page Header - Compact */}
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-medium text-text-primary">
+            Agent Dashboard
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Search agents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40"
+            style={{ height: '28px', width: '200px' }}
+          />
+          <select
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
+            className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue"
+            style={{ height: '28px' }}
+          >
+            <option value="">All Tags</option>
+            {allTags.map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+          <select
+            value={filterProvider}
+            onChange={(e) => setFilterProvider(e.target.value)}
+            className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue"
+            style={{ height: '28px' }}
+          >
+            <option value="">All Providers</option>
+            {allProviders.map(provider => (
+              <option key={provider} value={provider}>{provider}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => router.push('/dashboard/new')}
+            className="px-2 py-1 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition"
+            style={{ height: '28px' }}
+          >
+            + New Agent
+          </button>
+        </div>
+      </div>
 
       {error && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg"
-        >
+        <div className="mb-2 p-1.5 text-xs bg-accent-red/10 border border-accent-red/30 text-accent-red rounded-sm">
           {error}
-        </motion.div>
+        </div>
       )}
 
       {loading ? (
-        <div className="text-center py-16">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading agents...</p>
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent-blue"></div>
+          <p className="mt-2 text-xs text-text-muted">Loading agents...</p>
         </div>
       ) : agents.length === 0 ? (
-        <AnimatedCard className="text-center py-16">
+        <div className="text-center py-8 bg-bg-elevated border border-border-subtle rounded-sm">
           <div className="max-w-md mx-auto">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-sm font-medium text-text-primary mb-2">
               Welcome to Agent Builder!
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Create your first AI agent to get started. You can customize everything later.
+            <p className="text-xs text-text-muted mb-3">
+              Create your first AI agent to get started.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <MorphButton variant="primary" onClick={() => router.push('/dashboard/new')}>
-                Create Your First Agent
-              </MorphButton>
-              <MorphButton 
-                variant="secondary" 
-                onClick={() => setShowOnboarding(true)}
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => router.push('/dashboard/new')}
+                className="px-3 py-1 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition"
               >
-                Take a Tour
-              </MorphButton>
+                Create Agent
+              </button>
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="px-3 py-1 text-xs bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm hover:bg-bg-hover transition"
+              >
+                Tour
+              </button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+            <p className="text-xs text-text-muted mt-2">
               Or try a <button 
                 onClick={() => handleQuickStart()}
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-accent-blue hover:underline"
               >
                 Quick Start
-              </button> with a pre-configured agent
+              </button>
             </p>
           </div>
-        </AnimatedCard>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {agents.map((agent, index) => (
-            <AnimatedCard key={agent.id} delay={index * 0.02} className="p-3">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1 flex-1 pr-1">
-                  {agent.name}
-                </h3>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => router.push(`/dashboard/chat/${agent.id}`)}
-                    className="text-accent hover:text-accent-hover text-xs transition-colors duration-150"
-                    title="Chat with agent"
-                  >
-                    💬
-                  </button>
-                  <button
-                    onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
-                    className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-xs transition-colors duration-150"
-                    title="Edit agent"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleForkClick(agent.id, agent.name)}
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs transition-colors duration-150"
-                    title="Fork agent"
-                  >
-                    🍴
-                  </button>
-                  <button
-                    onClick={() => handleDelete(agent.id)}
-                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs transition-colors duration-150"
-                    title="Delete agent"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 text-xs mb-2 line-clamp-2 min-h-[2.5rem]">
-                {agent.description}
-              </p>
-              {agent.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {agent.tags.slice(0, 2).map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-1.5 py-0.5 bg-accent-light dark:bg-blue-900/30 text-accent dark:text-blue-300 text-[10px] rounded border border-accent/20 transition-colors duration-150"
-                    >
-                      {tag}
+        <div className="bg-bg-elevated border border-border-subtle rounded-sm overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-bg-subtle border-b border-border-subtle">
+              <tr>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('name')}
+                  style={{ height: '30px' }}
+                >
+                  Agent <SortIcon field="name" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('model')}
+                >
+                  Default Model <SortIcon field="model" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('tools')}
+                >
+                  Tools <SortIcon field="tools" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('tags')}
+                >
+                  Tags <SortIcon field="tags" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('lastRun')}
+                >
+                  Last Run <SortIcon field="lastRun" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('version')}
+                >
+                  Version <SortIcon field="version" />
+                </th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle">
+              {filteredAndSortedAgents.map((agent) => (
+                <tr
+                  key={agent.id}
+                  className="hover:bg-bg-hover transition"
+                  style={{ height: '32px' }}
+                >
+                  <td className="px-2 py-1">
+                    <div>
+                      <div className="text-xs font-medium text-text-primary">
+                        {agent.name}
+                      </div>
+                      <div className="text-xs text-text-muted line-clamp-1">
+                        {agent.description}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-xs text-text-secondary font-mono">
+                      {agent.defaultModel.split(':').pop()}
                     </span>
-                  ))}
-                  {agent.tags.length > 2 && (
-                    <span className="px-1.5 py-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-                      +{agent.tags.length - 2}
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-xs text-text-secondary">
+                      {agent.allowedTools.length}
                     </span>
-                  )}
-                </div>
-              )}
-              <div className="text-[10px] text-gray-500 dark:text-gray-500 space-y-0.5 pt-2 border-t border-gray-200 dark:border-gray-700">
-                <div className="truncate" title={agent.defaultModel}>
-                  <span className="text-gray-400 dark:text-gray-500">M: </span>
-                  <span className="font-mono">{agent.defaultModel.split(':').pop()}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 dark:text-gray-500">Tools: </span>
-                  <span>{agent.allowedTools.length}</span>
-                </div>
-                {agent.latestVersion && (
-                  <div className="truncate" title={agent.latestVersion}>
-                    <span className="text-gray-400 dark:text-gray-500">V: </span>
-                    <span className="font-mono text-[9px] text-gray-600 dark:text-gray-400">
-                      {agent.latestVersion}
-                    </span>
-                  </div>
-                )}
-                {!agent.latestVersion && agent.promptVersion && (
-                  <div>
-                    <span className="text-gray-400 dark:text-gray-500">Pv{agent.promptVersion}</span>
-                  </div>
-                )}
-              </div>
-            </AnimatedCard>
-          ))}
+                  </td>
+                  <td className="px-2 py-1">
+                    <div className="flex flex-wrap gap-1">
+                      {agent.tags.slice(0, 2).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-1 py-0.5 text-[10px] bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {agent.tags.length > 2 && (
+                        <span className="text-[10px] text-text-muted">
+                          +{agent.tags.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 py-1">
+                    {agent.lastRun ? (
+                      <div className="flex items-center gap-1">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          agent.lastRun.status === 'completed' ? 'bg-accent-green' :
+                          agent.lastRun.status === 'error' ? 'bg-accent-red' :
+                          'bg-accent-amber animate-pulse'
+                        }`} />
+                        <span className="text-xs text-text-secondary">
+                          {formatLastRun(agent.lastRun)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1">
+                    {agent.latestVersion ? (
+                      <span className="text-xs text-text-secondary font-mono">
+                        {agent.latestVersion.substring(0, 8)}
+                      </span>
+                    ) : agent.promptVersion ? (
+                      <span className="text-xs text-text-muted">
+                        Pv{agent.promptVersion}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => router.push(`/dashboard/chat/${agent.id}`)}
+                        className="p-0.5 text-text-muted hover:text-accent-blue transition"
+                        title="Chat"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
+                        className="p-0.5 text-text-muted hover:text-text-primary transition"
+                        title="Edit"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleForkClick(agent.id, agent.name)}
+                        className="p-0.5 text-text-muted hover:text-accent-blue transition"
+                        title="Fork"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(agent.id)}
+                        className="p-0.5 text-text-muted hover:text-accent-red transition"
+                        title="Delete"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {/* Fork Agent Modal */}
       {forkingAgent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-bg-elevated border border-border-strong rounded-sm shadow-soft p-4 max-w-md w-full mx-4">
+            <h2 className="text-sm font-medium text-text-primary mb-3">
               Fork Agent
             </h2>
             <form onSubmit={handleForkSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-text-secondary mb-1">
                   New Agent Name *
                 </label>
                 <input
@@ -350,41 +606,42 @@ export default function Dashboard() {
                   required
                   value={forkName}
                   onChange={(e) => setForkName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40"
+                  style={{ height: '28px' }}
                   placeholder="Enter name for forked agent"
                   autoFocus
                 />
               </div>
-              <div className="mb-6">
-                <label className="flex items-center space-x-2 cursor-pointer">
+              <div className="mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={forkCopyMemory}
                     onChange={(e) => setForkCopyMemory(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-border-subtle text-accent-blue focus:ring-accent-blue"
                   />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-xs text-text-secondary">
                     Copy structured memory
                   </span>
                 </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                <p className="text-xs text-text-muted mt-1 ml-6">
                   If unchecked, the new agent will start with empty memory
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setForkingAgent(null);
                     setForkName('');
                   }}
-                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
+                  className="flex-1 px-3 py-1.5 text-xs bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm hover:bg-bg-hover transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  className="flex-1 px-3 py-1.5 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition"
                 >
                   Fork Agent
                 </button>

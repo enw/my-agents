@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 
 interface Model {
@@ -21,11 +21,16 @@ interface Model {
   metadata: Record<string, unknown>;
 }
 
+type SortField = 'name' | 'provider' | 'contextWindow' | 'cost' | 'speed';
+type SortDirection = 'asc' | 'desc';
+
 export default function ModelsPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterProvider, setFilterProvider] = useState<string>('');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   useEffect(() => {
     loadModels();
@@ -47,44 +52,113 @@ export default function ModelsPage() {
     }
   }
 
-  const providers = Array.from(new Set(models.map(m => m.provider)));
-  const filteredModels = filterProvider
-    ? models.filter(m => m.provider === filterProvider)
-    : models;
+  const providers = useMemo(() => Array.from(new Set(models.map(m => m.provider))), [models]);
+
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) {
+      return (
+        <span className="ml-1 text-text-muted opacity-0 group-hover:opacity-100 transition">
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        </span>
+      );
+    }
+    return (
+      <span className="ml-1 text-accent-blue">
+        {sortDirection === 'asc' ? (
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </span>
+    );
+  }
 
   function formatCost(cost?: { inputPer1M: number | string; outputPer1M: number | string }): string {
-    if (!cost) return 'N/A';
+    if (!cost) return '—';
     const inputPer1M = typeof cost.inputPer1M === 'string' ? parseFloat(cost.inputPer1M) : cost.inputPer1M;
     const outputPer1M = typeof cost.outputPer1M === 'string' ? parseFloat(cost.outputPer1M) : cost.outputPer1M;
     
-    // Handle NaN cases
     if (isNaN(inputPer1M) || isNaN(outputPer1M)) {
-      return 'N/A';
+      return '—';
     }
     
-    return `$${inputPer1M.toFixed(2)}/$1M in, $${outputPer1M.toFixed(2)}/$1M out`;
+    return `$${inputPer1M.toFixed(2)}/$1M`;
   }
 
+  const filteredAndSortedModels = useMemo(() => {
+    let filtered = filterProvider
+      ? models.filter(m => m.provider === filterProvider)
+      : models;
+
+    filtered.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'name':
+          aVal = a.displayName.toLowerCase();
+          bVal = b.displayName.toLowerCase();
+          break;
+        case 'provider':
+          aVal = a.provider.toLowerCase();
+          bVal = b.provider.toLowerCase();
+          break;
+        case 'contextWindow':
+          aVal = a.contextWindow;
+          bVal = b.contextWindow;
+          break;
+        case 'cost':
+          aVal = a.cost ? (typeof a.cost.inputPer1M === 'string' ? parseFloat(a.cost.inputPer1M) : a.cost.inputPer1M) : Infinity;
+          bVal = b.cost ? (typeof b.cost.inputPer1M === 'string' ? parseFloat(b.cost.inputPer1M) : b.cost.inputPer1M) : Infinity;
+          break;
+        case 'speed':
+          aVal = a.speed || 0;
+          bVal = b.speed || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        const comparison = aVal.localeCompare(bVal);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [models, filterProvider, sortField, sortDirection]);
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+    <div className="p-3">
+      {/* Page Header - Compact */}
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-lg font-medium text-text-primary">
           Model Browser
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Browse available AI models and their capabilities
-        </p>
-      </div>
-
-      {/* Filter */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Filter by Provider
-        </label>
         <select
           value={filterProvider}
           onChange={(e) => setFilterProvider(e.target.value)}
-          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue"
+          style={{ height: '28px' }}
         >
           <option value="">All Providers</option>
           {providers.map((provider) => (
@@ -96,112 +170,130 @@ export default function ModelsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg">
+        <div className="mb-2 p-1.5 text-xs bg-accent-red/10 border border-accent-red/30 text-accent-red rounded-sm">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading models...</p>
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent-blue"></div>
+          <p className="mt-2 text-xs text-text-muted">Loading models...</p>
         </div>
-      ) : filteredModels.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">No models found</p>
+      ) : filteredAndSortedModels.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-xs text-text-muted">No models found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredModels.map((model) => (
-            <div
-              key={model.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {model.displayName}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {model.provider}
-                  </p>
-                </div>
-                {model.size && (
-                  <span className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
-                    {model.size}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-3 text-sm">
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Context Window:</span>
-                  <span className="ml-2 text-gray-900 dark:text-white font-medium">
-                    {model.contextWindow.toLocaleString()} tokens
-                  </span>
-                </div>
-
-                {model.cost && (
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Cost:</span>
-                    <span className="ml-2 text-gray-900 dark:text-white text-xs">
+        <div className="bg-bg-elevated border border-border-subtle rounded-sm overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-bg-subtle border-b border-border-subtle">
+              <tr>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('name')}
+                  style={{ height: '30px' }}
+                >
+                  Model <SortIcon field="name" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('provider')}
+                >
+                  Provider <SortIcon field="provider" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('contextWindow')}
+                >
+                  Context <SortIcon field="contextWindow" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('cost')}
+                >
+                  Cost <SortIcon field="cost" />
+                </th>
+                <th
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
+                  onClick={() => handleSort('speed')}
+                >
+                  Speed <SortIcon field="speed" />
+                </th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide">
+                  Capabilities
+                </th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide">
+                  ID
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle">
+              {filteredAndSortedModels.map((model) => (
+                <tr
+                  key={model.id}
+                  className="hover:bg-bg-hover transition"
+                  style={{ height: '32px' }}
+                >
+                  <td className="px-2 py-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-text-primary">
+                        {model.displayName}
+                      </span>
+                      {model.size && (
+                        <span className="px-1 py-0.5 text-[10px] bg-bg-subtle text-text-muted border border-border-subtle rounded-sm">
+                          {model.size}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-xs text-text-secondary">
+                      {model.provider}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-xs text-text-secondary">
+                      {model.contextWindow.toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1">
+                    <span className="text-xs text-text-secondary">
                       {formatCost(model.cost)}
                     </span>
-                  </div>
-                )}
-
-                {model.speed && (
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Speed:</span>
-                    <span className="ml-2 text-gray-900 dark:text-white">
-                      ~{model.speed} tokens/sec
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex gap-2 flex-wrap">
-                  {model.supportsTools && (
-                    <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded">
-                      Tools
-                    </span>
-                  )}
-                  {model.supportsStreaming && (
-                    <span className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded">
-                      Streaming
-                    </span>
-                  )}
-                </div>
-
-                {model.strengths && model.strengths.length > 0 && (
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Strengths:</span>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {model.strengths.map((strength, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded"
-                        >
-                          {strength}
+                  </td>
+                  <td className="px-2 py-1">
+                    {model.speed ? (
+                      <span className="text-xs text-text-secondary">
+                        ~{model.speed}/s
+                      </span>
+                    ) : (
+                      <span className="text-xs text-text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {model.supportsTools && (
+                        <span className="px-1 py-0.5 text-[10px] bg-accent-green/10 text-accent-green border border-accent-green/20 rounded-sm">
+                          Tools
                         </span>
-                      ))}
+                      )}
+                      {model.supportsStreaming && (
+                        <span className="px-1 py-0.5 text-[10px] bg-accent-purple/10 text-accent-purple border border-accent-purple/20 rounded-sm">
+                          Stream
+                        </span>
+                      )}
                     </div>
-                  </div>
-                )}
-
-                {model.lastUsed && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Last used: {new Date(model.lastUsed).toLocaleDateString()}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <code className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                  {model.id}
-                </code>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-2 py-1">
+                    <code className="text-xs text-text-muted font-mono">
+                      {model.id.split(':').pop()}
+                    </code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

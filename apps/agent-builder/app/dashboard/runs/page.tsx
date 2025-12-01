@@ -3,8 +3,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import MorphButton from '../../components/MorphButton';
 
 interface Run {
   id: string;
@@ -258,21 +256,21 @@ export default function RunsPage() {
   function SortIcon({ field }: { field: SortField }) {
     if (sortField !== field) {
       return (
-        <span className="ml-1 text-gray-400">
-          <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className="ml-1 text-text-muted opacity-0 group-hover:opacity-100 transition">
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
           </svg>
         </span>
       );
     }
     return (
-      <span className="ml-1">
+      <span className="ml-1 text-accent-blue">
         {sortDirection === 'asc' ? (
-          <svg className="w-4 h-4 inline text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
         ) : (
-          <svg className="w-4 h-4 inline text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         )}
@@ -281,36 +279,18 @@ export default function RunsPage() {
   }
 
   return (
-    <div className="p-8">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
+    <div className="p-3">
+      {/* Page Header - Compact */}
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-lg font-medium text-text-primary">
           Run History
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          View all agent execution runs and their details
-        </p>
-      </motion.div>
-
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="mb-6 flex gap-4"
-      >
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Filter by Agent
-          </label>
+        <div className="flex items-center gap-2">
           <select
             value={filterAgentId}
             onChange={(e) => setFilterAgentId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue"
+            style={{ height: '28px' }}
           >
             <option value="">All Agents</option>
             {Array.from(agents.values()).map((agent) => (
@@ -319,66 +299,59 @@ export default function RunsPage() {
               </option>
             ))}
           </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Filter by Status
-          </label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            className="px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue"
+            style={{ height: '28px' }}
           >
             <option value="">All Statuses</option>
             <option value="running">Running</option>
             <option value="completed">Completed</option>
             <option value="error">Error</option>
-            </select>
-          </div>
-        </motion.div>
+          </select>
+        </div>
+      </div>
 
       {/* Bulk Actions Bar */}
       {selectedRuns.size > 0 && (
-        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
-          <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+        <div className="mb-2 p-2 bg-bg-elevated border border-border-subtle rounded-sm flex items-center justify-between">
+          <span className="text-xs text-text-primary">
             {selectedRuns.size} run{selectedRuns.size !== 1 ? 's' : ''} selected
           </span>
-          <MorphButton
-            variant="danger"
-            onClick={handleBulkDelete}
-            disabled={deletingRun === 'bulk'}
-          >
-            {deletingRun === 'bulk' ? 'Deleting...' : `Delete ${selectedRuns.size} run${selectedRuns.size !== 1 ? 's' : ''}`}
-          </MorphButton>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkDelete}
+              disabled={deletingRun === 'bulk'}
+              className="px-2 py-1 text-xs bg-accent-red text-text-inverse rounded-sm hover:opacity-90 disabled:opacity-50 transition"
+            >
+              {deletingRun === 'bulk' ? 'Deleting...' : `Delete ${selectedRuns.size}`}
+            </button>
+          </div>
         </div>
       )}
 
       {error && (
-        <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded-lg">
+        <div className="mb-2 p-1.5 text-xs bg-accent-red/10 border border-accent-red/30 text-accent-red rounded-sm">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading runs...</p>
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent-blue"></div>
+          <p className="mt-2 text-xs text-text-muted">Loading runs...</p>
         </div>
       ) : sortedRuns.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">No runs found</p>
+        <div className="text-center py-8">
+          <p className="text-xs text-text-muted">No runs found</p>
         </div>
-        ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-        >
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
+      ) : (
+        <div className="bg-bg-elevated border border-border-subtle rounded-sm overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-bg-subtle border-b border-border-subtle">
               <tr>
-                <th className="px-6 py-3 text-left">
+                <th className="px-2 py-1.5 text-left" style={{ height: '30px' }}>
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -386,133 +359,134 @@ export default function RunsPage() {
                       if (input) input.indeterminate = someSelected;
                     }}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-border-subtle text-accent-blue focus:ring-accent-blue"
                   />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('agent')}
                 >
                   Agent <SortIcon field="agent" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('model')}
                 >
                   Model <SortIcon field="model" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('status')}
                 >
                   Status <SortIcon field="status" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('tokens')}
                 >
                   Tokens <SortIcon field="tokens" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('toolCalls')}
                 >
                   Tool Calls <SortIcon field="toolCalls" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('duration')}
                 >
                   Duration <SortIcon field="duration" />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide cursor-pointer hover:bg-bg-hover transition group"
                   onClick={() => handleSort('created')}
                 >
                   Created <SortIcon field="created" />
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide">
                   Version
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-2 py-1.5 text-left text-xs font-medium text-text-muted uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
             </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedRuns.map((run, index) => (
-                  <motion.tr
-                    key={run.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15, delay: index * 0.02, ease: [0.16, 1, 0.3, 1] }}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150"
-                  >
-                  <td className="px-6 py-4 whitespace-nowrap">
+            <tbody className="divide-y divide-border-subtle">
+              {sortedRuns.map((run) => (
+                <tr
+                  key={run.id}
+                  className="hover:bg-bg-hover transition"
+                  style={{ height: '30px' }}
+                >
+                  <td className="px-2 py-1 whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={selectedRuns.has(run.id)}
                       onChange={(e) => handleSelectRun(run.id, e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-border-subtle text-accent-blue focus:ring-accent-blue"
                     />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-primary">
                     {agents.get(run.agentId)?.name || run.agentId}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 font-mono">
-                    {run.modelUsed}
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary font-mono">
+                    {run.modelUsed.split(':').pop()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      run.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                      run.status === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className={`px-1.5 py-0.5 text-xs font-medium rounded-sm ${
+                      run.status === 'completed' ? 'bg-accent-green/10 text-accent-green' :
+                      run.status === 'error' ? 'bg-accent-red/10 text-accent-red' :
+                      'bg-accent-amber/10 text-accent-amber'
                     }`}>
                       {run.status}
+                      {run.status === 'running' && (
+                        <span className="ml-1 inline-block w-1 h-1 rounded-full bg-accent-amber animate-pulse" />
+                      )}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary">
                     {run.totalTokens.totalTokens.toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary">
                     {run.totalToolCalls}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary">
                     {formatDuration(run.createdAt, run.completedAt)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                    {formatDate(run.createdAt)}
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary">
+                    {new Date(run.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-2 py-1 whitespace-nowrap text-xs text-text-secondary">
                     {run.agentVersion ? (
-                      <span className="font-mono text-xs">{run.agentVersion}</span>
+                      <span className="font-mono">{run.agentVersion.substring(0, 8)}</span>
                     ) : (
-                      <span className="text-gray-400 dark:text-gray-500">—</span>
+                      <span className="text-text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex gap-3">
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
                       <Link
                         href={`/dashboard/runs/${run.id}`}
-                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        className="text-xs text-accent-blue hover:underline"
                       >
                         View
                       </Link>
                       <button
                         onClick={() => handleDeleteRun(run.id)}
                         disabled={deletingRun === run.id}
-                        className="text-red-600 hover:text-red-700 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-xs text-accent-red hover:underline disabled:opacity-50"
                         title="Delete run"
                       >
-                        {deletingRun === run.id ? 'Deleting...' : 'Delete'}
+                        {deletingRun === run.id ? '...' : 'Del'}
                       </button>
                     </div>
                   </td>
-                  </motion.tr>
-                ))}
+                </tr>
+              ))}
             </tbody>
           </table>
-        </motion.div>
+        </div>
       )}
     </div>
   );
