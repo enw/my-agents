@@ -3,26 +3,70 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Bloomberg Lite Design Tokens - Light Mode */
   
-  /* Design System Tokens */
-  --accent-primary: #2563EB;
-  --accent-primary-hover: #1D4ED8;
-  --accent-primary-light: #DBEAFE;
+  /* Background Colors */
+  --bg-base: #FAFAFA;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #F5F5F5;
+  --bg-hover: #EEEEEE;
+  --bg-selected: #E3E3E3;
   
-  --border-light: #E5E7EB;
-  --border-dark: #374151;
+  /* Border Colors */
+  --border-subtle: #E0E0E0;
+  --border-strong: #D0D0D0;
   
-  --text-muted-light: #6B7280;
-  --text-muted-dark: #9CA3AF;
+  /* Text Colors */
+  --text-primary: #0A0A0A;
+  --text-secondary: #2A2A2A;
+  --text-muted: #6B6B6B;
+  --text-inverse: #FFFFFF;
   
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-base: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
+  /* Accent Colors */
+  --accent-blue: #2563EB;
+  --accent-green: #16A34A;
+  --accent-amber: #CA8A04;
+  --accent-red: #DC2626;
+  --accent-purple: #9333EA;
+  
+  /* Shadows - lighter for light mode */
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.12);
+  
+  /* Spacing Scale (compact) */
+  --space-1: 2px;
+  --space-1_5: 3px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  
+  /* Border Radius */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  
+  /* Typography */
+  --font-size-base: 13px;
+  --line-height-base: 1.3;
+  
+  /* Legacy support (for existing components) */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --accent-primary: var(--accent-blue);
+  --accent-primary-hover: #2563EB;
+  --accent-primary-light: #1E3A8A;
+  --border-light: var(--border-subtle);
+  --border-dark: var(--border-strong);
+  --text-muted-light: var(--text-muted);
+  --text-muted-dark: var(--text-secondary);
+  
+  --spacing-xs: var(--space-2);
+  --spacing-sm: var(--space-3);
+  --spacing-base: var(--space-4);
+  --spacing-lg: var(--space-6);
+  --spacing-xl: 16px;
+  --spacing-2xl: 24px;
   
   --transition-fast: 100ms;
   --transition-base: 150ms;
@@ -34,16 +78,48 @@
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --border-light: #374151;
-  --border-dark: #4B5563;
+  /* Bloomberg Lite Design Tokens - Dark Mode */
+  
+  /* Background Colors */
+  --bg-base: #050608;
+  --bg-elevated: #0B0D10;
+  --bg-subtle: #111318;
+  --bg-hover: #181B22;
+  --bg-selected: #1F2430;
+  
+  /* Border Colors */
+  --border-subtle: #1E222B;
+  --border-strong: #2B3240;
+  
+  /* Text Colors */
+  --text-primary: #F9FAFB;
+  --text-secondary: #C7CEDD;
+  --text-muted: #80879A;
+  --text-inverse: #050608;
+  
+  /* Accent Colors */
+  --accent-blue: #3B82F6;
+  --accent-green: #22C55E;
+  --accent-amber: #FACC15;
+  --accent-red: #F97373;
+  --accent-purple: #A855F7;
+  
+  /* Shadows - darker for dark mode */
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
+  
+  /* Legacy support */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --border-light: var(--border-subtle);
+  --border-dark: var(--border-strong);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--text-primary);
+  background: var(--bg-base);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
 }
 
 @layer components {

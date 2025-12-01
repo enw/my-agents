@@ -151,11 +151,11 @@ export default function CommandPalette({
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[60vh] overflow-hidden flex flex-col"
+            className="relative bg-bg-elevated border border-border-strong rounded-sm shadow-soft w-[640px] mx-4 max-h-[60vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search Input */}
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="px-2 py-1.5 border-b border-border-subtle">
               <input
                 ref={inputRef}
                 type="text"
@@ -165,12 +165,13 @@ export default function CommandPalette({
                   setSelectedIndex(0);
                 }}
                 placeholder="Search commands, conversations, or actions..."
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                className="w-full px-2 py-1 text-sm bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40"
+                style={{ height: '32px' }}
               />
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200 dark:border-gray-700">
+            <div className="flex border-b border-border-subtle">
               {(['commands', 'conversations', 'actions'] as PaletteSection[]).map((section) => (
                 <button
                   key={section}
@@ -178,10 +179,10 @@ export default function CommandPalette({
                     setCurrentSection(section);
                     setSelectedIndex(0);
                   }}
-                  className={`px-4 py-2 text-sm font-medium transition ${
+                  className={`px-3 py-1 text-xs font-medium transition ${
                     currentSection === section
-                      ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      ? 'bg-bg-selected text-text-primary border-b-2 border-accent-blue'
+                      : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover'
                   }`}
                 >
                   {section.charAt(0).toUpperCase() + section.slice(1)}
@@ -192,9 +193,9 @@ export default function CommandPalette({
             {/* Results */}
             <div className="flex-1 overflow-y-auto">
               {currentSection === 'commands' && (
-                <div className="py-2">
+                <div>
                   {filteredCommands.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <div className="px-3 py-4 text-center text-xs text-text-muted">
                       No commands found
                     </div>
                   ) : (
@@ -205,20 +206,24 @@ export default function CommandPalette({
                           setSelectedIndex(idx);
                           handleSelect();
                         }}
-                        className={`px-4 py-2 cursor-pointer transition ${
+                        className={`px-3 py-1 cursor-pointer transition flex items-center justify-between ${
                           idx === selectedIndex
-                            ? 'bg-blue-50 dark:bg-blue-900/20'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                            ? 'bg-bg-selected'
+                            : 'hover:bg-bg-hover'
                         }`}
+                        style={{ height: '28px' }}
                       >
-                        <div className="flex items-center gap-3">
-                          <code className="text-sm font-mono text-blue-600 dark:text-blue-400">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-mono text-accent-blue">
                             /{command.name}
                           </code>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="text-xs text-text-secondary">
                             {command.description}
                           </span>
                         </div>
+                        <span className="text-xs text-text-muted">
+                          {command.category || 'command'}
+                        </span>
                       </div>
                     ))
                   )}
@@ -226,9 +231,9 @@ export default function CommandPalette({
               )}
 
               {currentSection === 'conversations' && (
-                <div className="py-2">
+                <div>
                   {filteredRuns.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <div className="px-3 py-4 text-center text-xs text-text-muted">
                       {searchQuery ? 'No conversations found' : 'No recent conversations'}
                     </div>
                   ) : (
@@ -239,18 +244,21 @@ export default function CommandPalette({
                           setSelectedIndex(idx);
                           handleSelect();
                         }}
-                        className={`px-4 py-2 cursor-pointer transition ${
+                        className={`px-3 py-1 cursor-pointer transition flex items-center justify-between ${
                           idx === selectedIndex
-                            ? 'bg-blue-50 dark:bg-blue-900/20'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                            ? 'bg-bg-selected'
+                            : 'hover:bg-bg-hover'
                         }`}
+                        style={{ height: '28px' }}
                       >
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {new Date(run.createdAt).toLocaleString()}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-text-primary">
+                            {new Date(run.createdAt).toLocaleString()}
+                          </span>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-xs text-text-muted">
                           {run.turns?.length || 0} turns
-                        </div>
+                        </span>
                       </div>
                     ))
                   )}
@@ -258,7 +266,7 @@ export default function CommandPalette({
               )}
 
               {currentSection === 'actions' && (
-                <div className="py-2">
+                <div>
                   {filteredActions.map((action, idx) => (
                     <div
                       key={action.id}
@@ -266,18 +274,20 @@ export default function CommandPalette({
                         setSelectedIndex(idx);
                         handleSelect();
                       }}
-                      className={`px-4 py-2 cursor-pointer transition ${
+                      className={`px-3 py-1 cursor-pointer transition flex items-center justify-between ${
                         idx === selectedIndex
-                          ? 'bg-blue-50 dark:bg-blue-900/20'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                          ? 'bg-bg-selected'
+                          : 'hover:bg-bg-hover'
                       }`}
+                      style={{ height: '28px' }}
                     >
-                      <div className="flex items-center gap-3">
-                        <span>{action.icon}</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs">{action.icon}</span>
+                        <span className="text-xs text-text-primary">
                           {action.label}
                         </span>
                       </div>
+                      <span className="text-xs text-text-muted">action</span>
                     </div>
                   ))}
                 </div>
@@ -285,8 +295,8 @@ export default function CommandPalette({
             </div>
 
             {/* Footer */}
-            <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-              <div className="flex gap-4">
+            <div className="px-3 py-1.5 border-t border-border-subtle text-xs text-text-muted flex items-center justify-between">
+              <div className="flex gap-3">
                 <span>↑↓ Navigate</span>
                 <span>Enter Select</span>
                 <span>Tab Switch</span>

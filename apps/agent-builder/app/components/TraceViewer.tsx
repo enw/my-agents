@@ -356,19 +356,20 @@ export default function TraceViewer({ run, loading }: TraceViewerProps) {
   }) || [];
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-4">
+    <div className="h-full overflow-y-auto p-2 space-y-2">
       {/* Search Bar */}
       {currentRun && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+        <div className="bg-bg-elevated rounded-sm p-1.5 border border-border-subtle">
           <input
             type="text"
             placeholder="Search messages, tools, parameters..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            className="w-full px-2 py-1 text-xs bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40"
+            style={{ height: '28px' }}
           />
           {searchTerm && (
-            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <div className="mt-1 text-xs text-text-muted">
               Found {filteredTurns.length} turn{filteredTurns.length !== 1 ? 's' : ''} matching "{searchTerm}"
             </div>
           )}
@@ -376,102 +377,98 @@ export default function TraceViewer({ run, loading }: TraceViewerProps) {
       )}
 
       {/* Run Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Run Summary</h3>
-          <div className="flex gap-2">
+      <div className="bg-bg-elevated rounded-sm p-2 border border-border-subtle">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-xs font-medium text-text-primary">Run Summary</h3>
+          <div className="flex gap-1">
             <button
               onClick={() => handleExport('json')}
-              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              className="px-2 py-0.5 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition"
               title="Export as JSON"
             >
-              Export JSON
+              JSON
             </button>
             <button
               onClick={() => handleExport('text')}
-              className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition"
+              className="px-2 py-0.5 text-xs bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm hover:bg-bg-hover transition"
               title="Export as Text"
             >
-              Export Text
+              TXT
             </button>
           </div>
         </div>
-        <div className="space-y-2 text-sm">
+        <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Status:</span>
+            <span className="text-text-muted">Status:</span>
             <span className={`font-medium ${
-              currentRun.status === 'completed' ? 'text-green-600 dark:text-green-400' :
-              currentRun.status === 'error' ? 'text-red-600 dark:text-red-400' :
-              'text-yellow-600 dark:text-yellow-400'
+              currentRun.status === 'completed' ? 'text-accent-green' :
+              currentRun.status === 'error' ? 'text-accent-red' :
+              'text-accent-amber'
             }`}>
               {currentRun.status}
               {currentRun.status === 'running' && (
-                <span className="ml-2 inline-block animate-pulse">●</span>
+                <span className="ml-1 inline-block animate-pulse">●</span>
               )}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Model:</span>
-            <span className="text-gray-900 dark:text-white font-mono text-xs">{currentRun.modelUsed}</span>
+            <span className="text-text-muted">Model:</span>
+            <span className="text-text-primary font-mono">{currentRun.modelUsed}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Total Tokens:</span>
-            <span className="text-gray-900 dark:text-white">{currentRun.totalTokens.totalTokens.toLocaleString()}</span>
+            <span className="text-text-muted">Tokens:</span>
+            <span className="text-text-primary">{currentRun.totalTokens.totalTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Input Tokens:</span>
-            <span className="text-gray-900 dark:text-white">{currentRun.totalTokens.inputTokens.toLocaleString()}</span>
+            <span className="text-text-muted">In/Out:</span>
+            <span className="text-text-secondary">{currentRun.totalTokens.inputTokens.toLocaleString()}/{currentRun.totalTokens.outputTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Output Tokens:</span>
-            <span className="text-gray-900 dark:text-white">{currentRun.totalTokens.outputTokens.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600 dark:text-gray-400">Tool Calls:</span>
-            <span className="text-gray-900 dark:text-white">{currentRun.totalToolCalls}</span>
+            <span className="text-text-muted">Tools:</span>
+            <span className="text-text-primary">{currentRun.totalToolCalls}</span>
           </div>
           {currentRun.totalDurationMs !== undefined && (
             <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Total Duration:</span>
-              <span className="text-gray-900 dark:text-white">
+              <span className="text-text-muted">Duration:</span>
+              <span className="text-text-primary">
                 {currentRun.totalDurationMs < 1000 
                   ? `${currentRun.totalDurationMs}ms` 
-                  : `${(currentRun.totalDurationMs / 1000).toFixed(2)}s`}
+                  : `${(currentRun.totalDurationMs / 1000).toFixed(1)}s`}
               </span>
             </div>
           )}
           {cost !== null && (
             <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Estimated Cost:</span>
-              <span className="text-gray-900 dark:text-white font-medium">
+              <span className="text-text-muted">Cost:</span>
+              <span className="text-text-primary font-medium">
                 ${cost.toFixed(6)}
               </span>
             </div>
           )}
           {loadingCost && (
             <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Estimated Cost:</span>
-              <span className="text-gray-500 dark:text-gray-400 text-xs">Calculating...</span>
+              <span className="text-text-muted">Cost:</span>
+              <span className="text-text-muted">Calculating...</span>
             </div>
           )}
           {currentRun.modelSettings && (
-            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Model Settings:</p>
-              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+            <div className="mt-1.5 pt-1.5 border-t border-border-subtle">
+              <p className="text-xs font-medium text-text-muted mb-0.5">Settings:</p>
+              <div className="text-xs text-text-secondary space-y-0.5">
                 {currentRun.modelSettings.temperature !== undefined && (
-                  <div>Temperature: {currentRun.modelSettings.temperature}</div>
+                  <div>T: {currentRun.modelSettings.temperature}</div>
                 )}
                 {currentRun.modelSettings.maxTokens !== undefined && (
-                  <div>Max Tokens: {currentRun.modelSettings.maxTokens.toLocaleString()}</div>
+                  <div>Max: {currentRun.modelSettings.maxTokens.toLocaleString()}</div>
                 )}
                 {currentRun.modelSettings.topP !== undefined && (
-                  <div>Top P: {currentRun.modelSettings.topP}</div>
+                  <div>TopP: {currentRun.modelSettings.topP}</div>
                 )}
               </div>
             </div>
           )}
           {currentRun.error && (
-            <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded text-xs">
+            <div className="mt-1.5 p-1.5 bg-accent-red/10 border border-accent-red/30 text-accent-red rounded-sm text-xs">
               {currentRun.error}
             </div>
           )}
@@ -480,63 +477,50 @@ export default function TraceViewer({ run, loading }: TraceViewerProps) {
 
       {/* Turns */}
       <div>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Conversation Turns</h3>
-        <div className="space-y-2">
+        <h3 className="text-xs font-medium text-text-primary mb-1.5">Conversation Turns</h3>
+        <div className="space-y-1">
           {filteredTurns.map((turn) => (
             <div
               key={turn.turnNumber}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+              className="bg-bg-elevated rounded-sm border border-border-subtle"
             >
               <button
                 onClick={() => toggleTurn(turn.turnNumber)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                className="w-full px-2 py-1.5 flex items-center justify-between hover:bg-bg-hover transition text-xs"
               >
-                <span className="font-medium text-gray-900 dark:text-white">
+                <span className="font-medium text-text-primary">
                   Turn {turn.turnNumber}
                 </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-text-muted">
                   {expandedTurns.has(turn.turnNumber) ? '▼' : '▶'}
                 </span>
               </button>
               {expandedTurns.has(turn.turnNumber) && (
-                <div className="px-4 pb-4 space-y-3 border-t border-gray-200 dark:border-gray-700">
+                <div className="px-2 pb-2 space-y-1.5 border-t border-border-subtle">
                   <div>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">User Message:</p>
-                    <p className="text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                    <p className="text-xs font-medium text-text-muted mb-0.5">User:</p>
+                    <p className="text-xs text-text-primary bg-bg-subtle p-1.5 rounded-sm">
                       {turn.userMessage}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Assistant Response:</p>
-                    <p className="text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                    <p className="text-xs font-medium text-text-muted mb-0.5">Assistant:</p>
+                    <p className="text-xs text-text-primary bg-bg-subtle p-1.5 rounded-sm">
                       {turn.assistantMessage}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Token Usage:</p>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                      <div>Input: {turn.usage.inputTokens}</div>
-                      <div>Output: {turn.usage.outputTokens}</div>
-                      <div>Total: {turn.usage.totalTokens}</div>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    <span>Tokens: {turn.usage.totalTokens}</span>
+                    {turn.durationMs !== undefined && (
+                      <>
+                        <span>•</span>
+                        <span>{turn.durationMs < 1000 
+                          ? `${turn.durationMs}ms` 
+                          : `${(turn.durationMs / 1000).toFixed(1)}s`}
+                        </span>
+                      </>
+                    )}
                   </div>
-                  {(turn.durationMs !== undefined || turn.startedAt) && (
-                    <div>
-                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Timing:</p>
-                      <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                        {turn.startedAt && (
-                          <div>Started: {new Date(turn.startedAt).toLocaleTimeString()}</div>
-                        )}
-                        {turn.durationMs !== undefined && (
-                          <div>
-                            Duration: {turn.durationMs < 1000 
-                              ? `${turn.durationMs}ms` 
-                              : `${(turn.durationMs / 1000).toFixed(2)}s`}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                   {turn.toolExecutions.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">

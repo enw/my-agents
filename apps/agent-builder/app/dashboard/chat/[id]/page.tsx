@@ -11,6 +11,8 @@ import CommandAutocomplete from './CommandAutocomplete';
 import CommandHelpModal from '../../../components/CommandHelpModal';
 import CommandPalette from '../../../components/CommandPalette';
 import ChatSidebar from '../../../components/ChatSidebar';
+import ChatRightPanel from '../../../components/ChatRightPanel';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { getAllCommands, CommandDefinition, CommandContext } from './commands';
 import { parseCommand, filterCommands, completeCommandName } from './commandParser';
 import { executeCommand, CommandStateSetters } from './commandExecutor';
@@ -71,8 +73,8 @@ export default function ChatPage() {
   const [maxTokens, setMaxTokens] = useState<number | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'chats' | 'agent' | 'tools'>('chats');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Reset state when agent changes (starting fresh)
@@ -828,6 +830,21 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
 
+  // Check if user has scrolled up to show "Jump to latest" button
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowJumpToLatest(!isAtBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [messages]);
+
   const handleCopyMessage = async (content: string, messageIndex: number) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -840,202 +857,179 @@ export default function ChatPage() {
 
   if (!agent) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-bg-base">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading agent...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
+          <p className="mt-4 text-sm text-text-muted">Loading agent...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
-      {/* Tabbed Sidebar */}
-      {sidebarOpen && (
-        <ChatSidebar
-          agentId={agentId}
-          allRuns={allRuns}
-          currentRunIndex={currentRunIndex}
-          onLoadConversation={loadConversation}
-          onStartNewChat={startNewChat}
-          onGoToPrevious={goToPreviousRun}
-          onGoToNext={goToNextRun}
-          onGoToLatest={goToLatestRun}
-          activeTab={sidebarTab}
-          onTabChange={setSidebarTab}
-          agent={agent}
-          currentRun={currentRun}
-          showTrace={showTrace}
-          onToggleTrace={() => setShowTrace(!showTrace)}
-          TraceViewerComponent={TraceViewer}
-          loading={loading && !currentRun}
-        />
-      )}
+    <div className="fixed inset-0 bg-bg-base flex overflow-hidden">
+      <PanelGroup direction="horizontal" className="h-full">
+        {/* Left Panel: Conversation List */}
+        <Panel defaultSize={20} minSize={15} maxSize={30} className="min-w-[180px]">
+          <ChatSidebar
+            allRuns={allRuns}
+            currentRunIndex={currentRunIndex}
+            onLoadConversation={loadConversation}
+            onGoToPrevious={goToPreviousRun}
+            onGoToNext={goToNextRun}
+            onGoToLatest={goToLatestRun}
+          />
+        </Panel>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col transition-all overflow-hidden h-full">
-        {/* Header - FIXED */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
-                  title="Toggle Sidebar"
-                >
-                  {sidebarOpen ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </button>
-                <Link
-                  href="/dashboard"
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
-                >
-                  ← Back to Dashboard
-                </Link>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowCommandPalette(true)}
-                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                  title="Open command palette (Cmd+K)"
-                >
-                  ⌘K
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <PanelResizeHandle className="w-1 bg-border-subtle hover:bg-border-strong transition-colors" />
+
+        {/* Center Panel: Chat Messages */}
+        <Panel defaultSize={50} minSize={30}>
+          <div className="h-full flex flex-col bg-bg-base">
+            {/* Header - Compact */}
+            <div className="flex-shrink-0 bg-bg-elevated border-b border-border-subtle px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Link
+                    href="/dashboard"
+                    className="text-xs text-text-secondary hover:text-text-primary transition"
+                  >
+                    ← Dashboard
+                  </Link>
+                  <span className="text-xs text-text-muted">•</span>
+                  <h1 className="text-sm font-medium text-text-primary">
                     {agent.name}
                   </h1>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {agent.description}
-                  </p>
-                </div>
-                <button
-                  onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
-                  className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition flex items-center gap-1.5"
-                  title="Edit agent"
-                >
-                  <span>✏️</span>
-                  <span>Edit</span>
-                </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    Model Override
-                  </label>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    disabled={loading}
-                  >
-                    {models.map((model: any) => {
-                      const hasToolUse = model.strengths?.includes('tool-use') ?? false;
-                      const isFree = !model.cost || (model.cost.inputPer1M === 0 && model.cost.outputPer1M === 0);
-                      
-                      return (
-                        <option key={model.id} value={model.id}>
-                          {model.displayName} ({model.provider}){hasToolUse ? ' 🔧' : ''}{isFree ? ' 🆓' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {selectedModel && selectedModel !== agent.defaultModel && (
+                    <>
+                      <span className="text-xs text-text-muted">•</span>
+                      <span className="text-xs text-text-muted font-mono">
+                        {selectedModel.split(':').pop()}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowCommandPalette(true)}
+                    className="px-2 py-1 text-xs bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm hover:bg-bg-hover transition"
+                    title="Open command palette (Cmd+K)"
+                  >
+                    ⌘K
+                  </button>
+                  <button
+                    onClick={() => router.push(`/dashboard/edit/${agent.id}`)}
+                    className="px-2 py-1 text-xs bg-bg-subtle text-text-secondary border border-border-subtle rounded-sm hover:bg-bg-hover transition"
+                    title="Edit agent"
+                  >
+                    ✏️
+                  </button>
                   <ThemeToggle />
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Messages - SCROLLABLE */}
-        <div 
-          className="flex-1 overflow-y-auto max-w-4xl w-full mx-auto px-4 py-6 min-h-0 overscroll-contain"
-          onClick={() => {
-            // Refocus input when clicking in message area
-            setTimeout(() => inputRef.current?.focus(), 100);
-          }}
-        >
-          {messages.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Start a conversation with {agent.name}
-              </p>
-              <button
-                onClick={() => inputRef.current?.focus()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl"
-              >
-                Start Chatting
-              </button>
-            </div>
-          )}
-          
-          <div className="space-y-4">
-            {messages.map((message, idx) => (
-              <div
-                key={idx}
-                className={`flex ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                } group`}
-              >
-                <div
-                  className={`relative max-w-3xl rounded-lg px-4 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  {/* Copy button - appears on hover */}
+            {/* Messages - SCROLLABLE */}
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto px-3 py-2 min-h-0 overscroll-contain"
+              onClick={() => {
+                // Refocus input when clicking in message area
+                setTimeout(() => inputRef.current?.focus(), 100);
+              }}
+            >
+              {messages.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-sm text-text-muted mb-3">
+                    Start a conversation with {agent.name}
+                  </p>
                   <button
-                    onClick={() => handleCopyMessage(message.content, idx)}
-                    className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                      message.role === 'user'
-                        ? 'hover:bg-blue-700 text-blue-100'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400'
-                    }`}
-                    title="Copy to clipboard"
+                    onClick={() => inputRef.current?.focus()}
+                    className="px-3 py-1.5 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition"
                   >
-                    {copiedMessageId === idx ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    )}
+                    Start Chatting
                   </button>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    className={`prose dark:prose-invert max-w-none prose-sm 
-                      prose-headings:mt-0 prose-headings:mb-2 prose-headings:font-semibold
-                      prose-p:my-2 prose-p:leading-relaxed
-                      prose-ul:my-2 prose-ol:my-2 prose-li:my-1
-                      prose-code:text-sm prose-code:font-mono
-                      prose-pre:bg-gray-100 dark:prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-gray-700
-                      prose-pre:text-gray-900 dark:prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:p-4 prose-pre:overflow-x-auto
-                      prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
-                      prose-strong:font-semibold prose-strong:text-gray-900 dark:prose-strong:text-gray-100
-                      prose-blockquote:border-l-4 prose-blockquote:border-gray-300 dark:prose-blockquote:border-gray-600 prose-blockquote:pl-4 prose-blockquote:italic
-                      prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-table:shadow-sm
-                      prose-th:border prose-th:border-gray-300 dark:prose-th:border-gray-600 prose-th:bg-gray-50 dark:prose-th:bg-gray-800 prose-th:p-3 prose-th:font-semibold prose-th:text-left prose-th:text-gray-900 dark:prose-th:text-gray-100
-                      prose-td:border prose-td:border-gray-300 dark:prose-td:border-gray-600 prose-td:p-3 prose-td:text-gray-700 dark:prose-td:text-gray-300
-                      prose-tr:hover:bg-gray-50 dark:prose-tr:hover:bg-gray-800/50
-                      ${message.role === 'user' ? 'prose-invert' : ''}`}
+                </div>
+              )}
+              
+              <div className="max-w-[780px] mx-auto space-y-1">
+                {messages.map((message, idx) => {
+                  const isUser = message.role === 'user';
+                  const modelTag = currentRun?.modelUsed || agent?.defaultModel || '';
+                  const tokens = currentRun?.totalTokens?.totalTokens || 0;
+                  
+                  return (
+                    <div key={idx} className="py-1">
+                      {/* Sender line */}
+                      <div className={`flex items-center gap-2 mb-1 text-xs ${
+                        isUser ? 'justify-end' : 'justify-start'
+                      }`}>
+                        {!isUser && (
+                          <>
+                            <span className="text-text-primary font-medium">{agent.name}</span>
+                            <span className="text-text-muted">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {modelTag && (
+                              <>
+                                <span className="text-text-muted">•</span>
+                                <span className="text-text-muted font-mono">{modelTag.split(':').pop()}</span>
+                              </>
+                            )}
+                            {tokens > 0 && idx === messages.length - 1 && (
+                              <>
+                                <span className="text-text-muted">•</span>
+                                <span className="text-text-muted">{tokens.toLocaleString()} tokens</span>
+                              </>
+                            )}
+                          </>
+                        )}
+                        {isUser && (
+                          <>
+                            <span className="text-text-muted">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="text-text-primary font-medium">You</span>
+                          </>
+                        )}
+                      </div>
+                      
+                      {/* Message content */}
+                      <div
+                        className={`relative rounded-sm px-2 py-1.5 group ${
+                          isUser
+                            ? 'bg-bg-elevated text-text-primary ml-auto max-w-[80%]'
+                            : 'bg-bg-subtle text-text-primary'
+                        }`}
+                      >
+                        {/* Copy button - appears on hover */}
+                        <button
+                          onClick={() => handleCopyMessage(message.content, idx)}
+                          className={`absolute top-1 right-1 p-1 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-text-primary hover:bg-bg-hover`}
+                          title="Copy to clipboard"
+                        >
+                          {copiedMessageId === idx ? (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          className={`prose prose-invert max-w-none text-xs
+                            prose-headings:mt-0 prose-headings:mb-1 prose-headings:font-semibold prose-headings:text-text-primary
+                            prose-p:my-1 prose-p:leading-relaxed prose-p:text-text-primary
+                            prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5
+                            prose-code:text-xs prose-code:font-mono prose-code:bg-bg-elevated prose-code:px-1 prose-code:py-0.5 prose-code:rounded-sm
+                            prose-pre:bg-bg-elevated prose-pre:border prose-pre:border-border-subtle
+                            prose-pre:text-text-primary prose-pre:rounded-sm prose-pre:p-2 prose-pre:overflow-x-auto prose-pre:text-xs
+                            prose-a:text-accent-blue prose-a:no-underline hover:prose-a:underline
+                            prose-strong:font-semibold prose-strong:text-text-primary
+                            prose-blockquote:border-l-2 prose-blockquote:border-border-subtle prose-blockquote:pl-2 prose-blockquote:italic prose-blockquote:text-text-secondary
+                            prose-table:w-full prose-table:border-collapse prose-table:my-2 prose-table:text-xs
+                            prose-th:border prose-th:border-border-subtle prose-th:bg-bg-elevated prose-th:p-1.5 prose-th:font-semibold prose-th:text-left prose-th:text-text-primary
+                            prose-td:border prose-td:border-border-subtle prose-td:p-1.5 prose-td:text-text-secondary
+                            prose-tr:hover:bg-bg-hover`}
                     components={{
                       code: ({ node, className, children, ...props }: any) => {
                         const match = /language-(\w+)/.exec(className || '');
@@ -1045,11 +1039,7 @@ export default function ChatPage() {
                           // Inline code styling
                           return (
                             <code 
-                              className={`bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono ${
-                                message.role === 'user' 
-                                  ? 'bg-blue-500/20 text-blue-100' 
-                                  : 'text-gray-900 dark:text-gray-100'
-                              }`}
+                              className={`bg-bg-elevated px-1 py-0.5 rounded-sm text-xs font-mono text-text-primary`}
                               {...props}
                             >
                               {children}
@@ -1060,11 +1050,7 @@ export default function ChatPage() {
                         // Code block styling
                         return (
                           <code 
-                            className={`block w-full p-0 bg-transparent text-sm font-mono ${
-                              message.role === 'user' 
-                                ? 'text-blue-50' 
-                                : 'text-gray-900 dark:text-gray-100'
-                            }`}
+                            className={`block w-full p-0 bg-transparent text-xs font-mono text-text-primary`}
                             {...props}
                           >
                             {children}
@@ -1074,11 +1060,7 @@ export default function ChatPage() {
                       pre: ({ children, ...props }: any) => {
                         return (
                           <pre 
-                            className={`my-4 rounded-lg p-4 overflow-x-auto ${
-                              message.role === 'user'
-                                ? 'bg-blue-500/20 border border-blue-400/30'
-                                : 'bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700'
-                            }`}
+                            className={`my-2 rounded-sm p-2 overflow-x-auto bg-bg-elevated border border-border-subtle text-xs`}
                             {...props}
                           >
                             {children}
@@ -1091,11 +1073,7 @@ export default function ChatPage() {
                             href={href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`${
-                              message.role === 'user'
-                                ? 'text-blue-200 hover:text-blue-100'
-                                : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
-                            } underline transition-colors`}
+                            className={`text-accent-blue hover:underline transition-colors`}
                             {...props}
                           >
                             {children}
@@ -1106,11 +1084,7 @@ export default function ChatPage() {
                         return (
                           <div className="overflow-x-auto my-2">
                             <table
-                              className={`w-full border-collapse border border-gray-300 dark:border-gray-600 rounded overflow-hidden shadow-sm text-xs ${
-                                message.role === 'user'
-                                  ? 'border-blue-400/30'
-                                  : ''
-                              }`}
+                              className={`w-full border-collapse border border-border-subtle rounded-sm overflow-hidden text-xs`}
                               {...props}
                             >
                               {children}
@@ -1121,11 +1095,7 @@ export default function ChatPage() {
                       thead: ({ children, ...props }: any) => {
                         return (
                           <thead
-                            className={`${
-                              message.role === 'user'
-                                ? 'bg-blue-500/20'
-                                : 'bg-gray-50 dark:bg-gray-800'
-                            }`}
+                            className={`bg-bg-elevated`}
                             {...props}
                           >
                             {children}
@@ -1135,11 +1105,7 @@ export default function ChatPage() {
                       tbody: ({ children, ...props }: any) => {
                         return (
                           <tbody
-                            className={`divide-y divide-gray-200 dark:divide-gray-700 ${
-                              message.role === 'user'
-                                ? 'divide-blue-400/20'
-                                : ''
-                            }`}
+                            className={`divide-y divide-border-subtle`}
                             {...props}
                           >
                             {children}
@@ -1149,11 +1115,7 @@ export default function ChatPage() {
                       tr: ({ children, ...props }: any) => {
                         return (
                           <tr
-                            className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                              message.role === 'user'
-                                ? 'hover:bg-blue-500/10'
-                                : ''
-                            }`}
+                            className={`hover:bg-bg-hover transition-colors`}
                             {...props}
                           >
                             {children}
@@ -1163,11 +1125,7 @@ export default function ChatPage() {
                       th: ({ children, ...props }: any) => {
                         return (
                           <th
-                            className={`px-2 py-1 text-xs text-left font-semibold border-b border-gray-300 dark:border-gray-600 whitespace-nowrap ${
-                              message.role === 'user'
-                                ? 'text-blue-100 border-blue-400/30'
-                                : 'text-gray-900 dark:text-gray-100'
-                            }`}
+                            className={`px-2 py-1 text-xs text-left font-semibold border-b border-border-subtle whitespace-nowrap text-text-primary`}
                             {...props}
                           >
                             {children}
@@ -1177,11 +1135,7 @@ export default function ChatPage() {
                       td: ({ children, ...props }: any) => {
                         return (
                           <td
-                            className={`px-2 py-1 text-xs border-b border-gray-200 dark:border-gray-700 ${
-                              message.role === 'user'
-                                ? 'text-blue-50 border-blue-400/20'
-                                : 'text-gray-700 dark:text-gray-300'
-                            }`}
+                            className={`px-2 py-1 text-xs border-b border-border-subtle text-text-secondary`}
                             {...props}
                           >
                             {children}
@@ -1189,98 +1143,95 @@ export default function ChatPage() {
                         );
                       },
                     }}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
-                  <p
-                    className={`text-xs mt-1 ${
-                      message.role === 'user'
-                        ? 'text-blue-100'
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}
-                  >
-                    {message.timestamp.toLocaleTimeString()}
-                  </p>
+                          >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+              
+              {/* Jump to latest button */}
+              {showJumpToLatest && (
+                <button
+                  onClick={scrollToBottom}
+                  className="fixed bottom-20 right-6 px-2 py-1 text-xs bg-bg-elevated text-text-primary border border-border-subtle rounded-sm hover:bg-bg-hover transition shadow-soft z-20"
+                  style={{ height: '28px' }}
+                >
+                  ↓ Latest
+                </button>
+              )}
+            </div>
+
+            {/* Input - Compact */}
+            <div className="flex-shrink-0 bg-bg-elevated border-t border-border-subtle px-3 py-2">
+              {error && (
+                <div className="mb-2 p-1.5 text-xs bg-accent-red/10 border border-accent-red/30 text-accent-red rounded-sm">
+                  {error}
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* Input - FIXED AT BOTTOM */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            {error && (
-              <div className="mb-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 rounded text-sm">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-2 relative">
-              <div className="flex-1 relative">
-                {showAutocomplete && filteredCommands.length > 0 && (
-                  <CommandAutocomplete
-                    input={input}
-                    cursorPosition={cursorPosition}
-                    commands={filteredCommands}
-                    selectedIndex={selectedCommandIndex}
-                    onSelect={handleCommandSelect}
-                    onClose={() => setShowAutocomplete(false)}
-                    context={getCommandContext()}
-                    inputRef={inputRef}
+              )}
+              <div className="flex gap-2 relative max-w-[780px] mx-auto">
+                <div className="flex-1 relative">
+                  {showAutocomplete && filteredCommands.length > 0 && (
+                    <CommandAutocomplete
+                      input={input}
+                      cursorPosition={cursorPosition}
+                      commands={filteredCommands}
+                      selectedIndex={selectedCommandIndex}
+                      onSelect={handleCommandSelect}
+                      onClose={() => setShowAutocomplete(false)}
+                      context={getCommandContext()}
+                      inputRef={inputRef}
+                    />
+                  )}
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    onKeyPress={(e) => {
+                      // Prevent default Enter behavior to keep focus
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder={showAutocomplete ? "Select a command or continue typing..." : "Type your message... (use / for commands)"}
+                    disabled={false}
+                    autoFocus
+                    className="w-full px-2.5 py-1 text-sm bg-bg-subtle text-text-primary border border-border-subtle rounded-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40"
+                    style={{ height: '30px' }}
                   />
-                )}
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  onKeyPress={(e) => {
-                    // Prevent default Enter behavior to keep focus
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder={showAutocomplete ? "Select a command or continue typing..." : "Type your message... (use / for commands)"}
-                  disabled={false}
-                  autoFocus
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
+                </div>
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim()}
+                  className="px-3 py-1 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  style={{ height: '30px' }}
+                >
+                  {processingQueue ? `Sending (${queuedMessages.length})` : 'Send'}
+                </button>
               </div>
-              <button
-                onClick={handleSend}
-                disabled={!input.trim()}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {processingQueue ? `Sending... (${queuedMessages.length} queued)` : 'Send'}
-              </button>
             </div>
           </div>
-        </div>
-      </div>
+        </Panel>
 
-      {/* Trace Viewer Overlay */}
-      {showTrace && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Execution Trace</h2>
-              <button
-                onClick={() => setShowTrace(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden p-6">
-              <TraceViewer run={currentRun} loading={loading && !currentRun} />
-            </div>
-          </div>
-        </div>
-      )}
+        <PanelResizeHandle className="w-1 bg-border-subtle hover:bg-border-strong transition-colors" />
+
+        {/* Right Panel: Tools/Trace/Files/Notes */}
+        <Panel defaultSize={30} minSize={20} maxSize={40} className="min-w-[200px]">
+          <ChatRightPanel
+            agent={agent}
+            currentRun={currentRun}
+            showTrace={showTrace}
+            onToggleTrace={() => setShowTrace(!showTrace)}
+            loading={loading && !currentRun}
+          />
+        </Panel>
+      </PanelGroup>
+
 
       {/* Help Modal */}
       <CommandHelpModal

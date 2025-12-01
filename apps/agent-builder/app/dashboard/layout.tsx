@@ -14,64 +14,68 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="min-h-screen bg-bg-base flex">
       {/* Sidebar */}
       <aside
         className={`${
-          sidebarOpen ? 'w-64' : 'w-0'
-        } transition-all duration-300 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-hidden`}
+          sidebarOpen ? 'w-[180px]' : 'w-0'
+        } transition-all duration-300 bg-bg-subtle border-r border-border-subtle overflow-hidden`}
       >
         <div className="h-full flex flex-col">
           {/* Sidebar Header */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900 dark:text-white">Agents</h2>
+          <div className="p-3 border-b border-border-subtle flex items-center justify-between">
+            <h2 className="text-sm font-medium text-text-primary">Agents</h2>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              className="md:hidden text-text-muted hover:text-text-secondary"
             >
               ×
             </button>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+          <nav className="flex-1 overflow-y-auto p-2 space-y-1">
             <Link
               href="/dashboard"
-              className={`block px-4 py-2 rounded-lg transition ${
+              className={`block px-3 py-1.5 text-sm transition rounded-sm ${
                 pathname === '/dashboard'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-bg-selected text-text-primary border-l-2 border-accent-blue'
+                  : 'text-text-secondary hover:bg-bg-hover'
               }`}
+              style={{ height: '32px' }}
             >
               All Agents
             </Link>
             <Link
               href="/dashboard/runs"
-              className={`block px-4 py-2 rounded-lg transition ${
+              className={`block px-3 py-1.5 text-sm transition rounded-sm ${
                 pathname?.startsWith('/dashboard/runs')
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-bg-selected text-text-primary border-l-2 border-accent-blue'
+                  : 'text-text-secondary hover:bg-bg-hover'
               }`}
+              style={{ height: '32px' }}
             >
               Run History
             </Link>
             <Link
               href="/dashboard/models"
-              className={`block px-4 py-2 rounded-lg transition ${
+              className={`block px-3 py-1.5 text-sm transition rounded-sm ${
                 pathname?.startsWith('/dashboard/models')
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-bg-selected text-text-primary border-l-2 border-accent-blue'
+                  : 'text-text-secondary hover:bg-bg-hover'
               }`}
+              style={{ height: '32px' }}
             >
               Models
             </Link>
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-2 border-t border-border-subtle">
             <Link
               href="/dashboard/new"
-              className="block w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-center"
+              className="block w-full px-3 py-1.5 text-xs bg-accent-blue text-text-inverse rounded-sm hover:opacity-90 transition text-center"
+              style={{ height: '30px' }}
             >
               + New Agent
             </Link>
@@ -82,17 +86,17 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+        <div className="bg-bg-elevated border-b border-border-subtle px-3 py-2 flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400"
+            className="text-text-muted hover:text-text-secondary"
           >
-            {sidebarOpen ? '☰' : '☰'}
+            ☰
           </button>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm"
+              className="text-xs text-text-secondary hover:text-text-primary transition"
             >
               Home
             </Link>
@@ -101,7 +105,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-bg-base">{children}</main>
       </div>
     </div>
   );
